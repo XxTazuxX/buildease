@@ -17,3 +17,11 @@ export PATH="$HOME/.local/bin:$PATH"
 
 echo "uv:"
 uv --version
+
+if ! command -v graphify >/dev/null 2>&1; then
+    echo "Installing Graphify..."
+    uv tool install graphifyy
+fi
+
+echo "Graphify:"
+graphify --version
