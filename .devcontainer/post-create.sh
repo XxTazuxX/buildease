@@ -1,3 +1,11 @@
+# Git LFS is required by the repository's pre-push hook.
+if ! command -v git-lfs >/dev/null 2>&1; then
+    echo "Installing Git LFS..."
+    sudo apt-get update && sudo apt-get install -y git-lfs || exit 1
+fi
+
+git lfs install --local --skip-repo || exit 1
+
 echo
 echo "Installing/updating OpenAI Codex CLI..."
 
