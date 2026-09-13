@@ -33,3 +33,11 @@ fi
 
 echo "Graphify:"
 graphify --version
+# Prepare the application without starting servers or touching persistent databases.
+if [ -f backend/pom.xml ]; then
+    chmod +x backend/mvnw
+    (cd backend && ./mvnw -q -DskipTests dependency:go-offline) || exit 1
+fi
+if [ -f frontend/package-lock.json ]; then
+    (cd frontend && npm ci) || exit 1
+fi

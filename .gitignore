@@ -7,3 +7,11 @@
 /frontend/coverage/
 *.log
 /.local/
+
+# Credentials and test artifacts
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+/frontend/test-results/
+/frontend/playwright-report/

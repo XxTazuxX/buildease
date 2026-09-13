@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: buildease
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    url: ${MIGRATION_DB_URL}
+    user: ${MIGRATION_DB_USERNAME}
+    password: ${MIGRATION_DB_PASSWORD}
+    baseline-on-migrate: false
+    clean-disabled: true
+    placeholders:
+      runtimeRole: ${DB_USERNAME}
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+app:
+  jwt-secret: ${JWT_SECRET}
+  secure-cookies: ${SECURE_COOKIES:true}
+  bootstrap-email: ${BOOTSTRAP_EMAIL:}
+  bootstrap-password: ${BOOTSTRAP_PASSWORD:}
+
+# Keep HTTP/security/JDBC logging free of credential-bearing request details.
+logging:
+  level:
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.jdbc: INFO
