@@ -47,6 +47,7 @@ export const theme = createTheme({
       styleOverrides: {
         body: {
           minWidth: 320,
+          overflowX: "hidden",
           backgroundImage:
             "radial-gradient(circle at 90% -10%, #E7F3EE 0, transparent 27rem)",
         },
@@ -66,11 +67,14 @@ export const theme = createTheme({
         root: {
           textTransform: "none",
           borderRadius: 10,
-          minHeight: 42,
+          minHeight: 44,
           paddingInline: 18,
         },
         contained: { boxShadow: `0 7px 18px ${alpha(evergreen, 0.18)}` },
       },
+    },
+    MuiIconButton: {
+      styleOverrides: { root: { width: 44, height: 44 } },
     },
     MuiTextField: { defaultProps: { variant: "outlined" } },
     MuiOutlinedInput: {

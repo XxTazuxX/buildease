@@ -20,6 +20,11 @@ export function PageHeader({
         mb: 3.5,
         justifyContent: "space-between",
         alignItems: { xs: "stretch", sm: "flex-end" },
+        "& > .MuiButton-root": {
+          width: { xs: "100%", sm: "auto" },
+          flexShrink: 0,
+          whiteSpace: "nowrap",
+        },
       }}
     >
       <Box>
@@ -57,7 +62,7 @@ export function MetricCard({
     slate: ["#EBF0EF", "#415653"],
   }[tone];
   return (
-    <Paper sx={{ p: 2.5, minWidth: 0, height: "100%" }}>
+    <Paper sx={{ p: { xs: 2, sm: 2.5 }, minWidth: 0, height: "100%" }}>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "flex-start" }}

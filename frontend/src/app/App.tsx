@@ -13,6 +13,8 @@ import {
   Alert,
   Avatar,
   Box,
+  BottomNavigation,
+  BottomNavigationAction,
   Button,
   CircularProgress,
   Container,
@@ -38,6 +40,7 @@ import {
 } from "@/modules/admin/viewmodel/useAdmin";
 import { BrandMark } from "@/shared/components/BrandMark";
 import { PageHeader } from "@/shared/components/Surface";
+import { ActionSheet, Glyph } from "@/shared/components/Responsive";
 
 const drawerWidth = 264;
 const PlatformPage = lazy(() =>
@@ -74,7 +77,7 @@ export default function App() {
   const cache = useQueryClient();
   const theme = useTheme();
   const desktop = useMediaQuery(theme.breakpoints.up("md"));
-  const [mobileNav, setMobileNav] = useState(false);
+  const [organizationSheet, setOrganizationSheet] = useState(false);
   const [org, setOrg] = useState("");
   const action = useAction();
   const commands = useAdminCommands();
@@ -129,7 +132,6 @@ export default function App() {
               component={RouterLink}
               to={item.path}
               selected={selected}
-              onClick={() => setMobileNav(false)}
               sx={{
                 borderRadius: 2.5,
                 mb: 0.75,
@@ -315,15 +317,15 @@ export default function App() {
 
   return (
     <Box sx={{ minHeight: "100vh" }}>
-      <Drawer
-        variant={desktop ? "permanent" : "temporary"}
-        open={desktop || mobileNav}
-        onClose={() => setMobileNav(false)}
-        ModalProps={{ keepMounted: true }}
-        sx={{ "& .MuiDrawer-paper": { width: drawerWidth, border: 0 } }}
-      >
-        {sidebar}
-      </Drawer>
+      {desktop && (
+        <Drawer
+          variant="permanent"
+          open
+          sx={{ "& .MuiDrawer-paper": { width: drawerWidth, border: 0 } }}
+        >
+          {sidebar}
+        </Drawer>
+      )}
       <Box sx={{ ml: { md: `${drawerWidth}px` }, minHeight: "100vh" }}>
         <Box
           component="header"
@@ -343,15 +345,8 @@ export default function App() {
             zIndex: 10,
           }}
         >
-          {!desktop && (
-            <IconButton
-              aria-label="Open navigation"
-              onClick={() => setMobileNav(true)}
-            >
-              ☰
-            </IconButton>
-          )}
-          <Box sx={{ flexGrow: 1 }}>
+          {!desktop && <BrandMark />}
+          <Box sx={{ flexGrow: 1, display: { xs: "none", md: "block" } }}>
             <Typography variant="caption" color="text.secondary">
               OPERATIONS WORKSPACE
             </Typography>
@@ -360,7 +355,7 @@ export default function App() {
                 "Platform overview"}
             </Typography>
           </Box>
-          {memberships.length > 0 && (
+          {memberships.length > 0 && desktop && (
             <TextField
               select
               size="small"
@@ -383,10 +378,45 @@ export default function App() {
               ))}
             </TextField>
           )}
+          {memberships.length > 0 && !desktop && (
+            <Button
+              aria-label="Organization"
+              onClick={() => setOrganizationSheet(true)}
+              endIcon={
+                <Box component="span" aria-hidden>
+                  ⌄
+                </Box>
+              }
+              sx={{
+                minWidth: 0,
+                maxWidth: 150,
+                px: 1,
+                color: "text.primary",
+                "& .MuiButton-endIcon": { ml: 0.5 },
+              }}
+            >
+              <Typography variant="body2" noWrap sx={{ fontWeight: 750 }}>
+                {memberships.find((m) => m.organization_id === activeOrg)?.name}
+              </Typography>
+            </Button>
+          )}
+          {!desktop && (
+            <IconButton
+              aria-label="Sign out"
+              onClick={() => void auth.signOut()}
+            >
+              <Glyph name="logout" />
+            </IconButton>
+          )}
         </Box>
         <Container
           maxWidth="xl"
-          sx={{ py: { xs: 3, md: 4.5 }, px: { xs: 2, sm: 3.5 } }}
+          sx={{
+            py: { xs: 2.5, md: 4.5 },
+            px: { xs: 1.75, sm: 3.5 },
+            pb: { xs: "calc(92px + env(safe-area-inset-bottom))", md: 4.5 },
+            overflowX: "hidden",
+          }}
         >
           <Suspense
             fallback={
@@ -487,7 +517,85 @@ export default function App() {
             </Routes>
           </Suspense>
         </Container>
+        {!desktop && (
+          <Paper
+            component="nav"
+            role="navigation"
+            aria-label="Primary navigation"
+            square
+            sx={{
+              position: "fixed",
+              zIndex: 20,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              borderWidth: "1px 0 0",
+              pb: "env(safe-area-inset-bottom)",
+              boxShadow: "0 -10px 35px rgba(20,50,47,.08)",
+            }}
+          >
+            <BottomNavigation
+              showLabels
+              value={
+                location.pathname.startsWith("/admin")
+                  ? "/admin"
+                  : location.pathname.startsWith("/profile") ||
+                      location.pathname.startsWith("/password")
+                    ? "/profile"
+                    : "/"
+              }
+              sx={{ height: 68 }}
+            >
+              <BottomNavigationAction
+                component={RouterLink}
+                to="/"
+                value="/"
+                label="Workspace"
+                icon={<Glyph name="home" />}
+              />
+              {profile.platform_admin && (
+                <BottomNavigationAction
+                  component={RouterLink}
+                  to="/admin"
+                  value="/admin"
+                  label="Administration"
+                  icon={<Glyph name="admin" />}
+                />
+              )}
+              <BottomNavigationAction
+                component={RouterLink}
+                to="/profile"
+                value="/profile"
+                label="Profile"
+                icon={<Glyph name="profile" />}
+              />
+            </BottomNavigation>
+          </Paper>
+        )}
       </Box>
+      <ActionSheet
+        open={organizationSheet}
+        onClose={() => setOrganizationSheet(false)}
+        title="Choose organization"
+      >
+        {memberships.map((membership) => (
+          <Button
+            key={membership.organization_id}
+            variant={
+              membership.organization_id === activeOrg ? "contained" : "text"
+            }
+            startIcon={<Glyph name="building" />}
+            onClick={() => {
+              cache.clear();
+              setOrg(membership.organization_id);
+              setOrganizationSheet(false);
+              navigate("/");
+            }}
+          >
+            {membership.name}
+          </Button>
+        ))}
+      </ActionSheet>
     </Box>
   );
 }

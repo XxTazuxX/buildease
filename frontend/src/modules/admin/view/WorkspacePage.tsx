@@ -5,7 +5,6 @@ import {
   Button,
   Checkbox,
   Chip,
-  Dialog,
   DialogContent,
   DialogTitle,
   Divider,
@@ -30,6 +29,8 @@ import {
   PageHeader,
   StatusChip,
 } from "@/shared/components/Surface";
+import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
+import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 function RoleDialog({
   org,
   building,
@@ -47,7 +48,7 @@ function RoleDialog({
   const [selected, setSelected] = useState<Role[] | null>(null);
   const values = selected ?? vm.query.data?.map((r) => r.role) ?? [];
   return (
-    <Dialog open onClose={close} fullWidth maxWidth="xs">
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
       <DialogTitle>Building roles · {member.display_name}</DialogTitle>
       <Divider />
       <DialogContent>
@@ -89,10 +90,12 @@ function RoleDialog({
           </Button>
         </Stack>
       </DialogContent>
-    </Dialog>
+    </AdaptiveDialog>
   );
 }
 export function WorkspacePage({ org }: { org: string }) {
+  const auth = useAuth();
+  const currentUserId = auth.profile?.id;
   const [building, setBuilding] = useState("");
   const [page, setPage] = useState(0);
   const [newBuilding, setNewBuilding] = useState(false);
@@ -100,6 +103,7 @@ export function WorkspacePage({ org }: { org: string }) {
   const [owner, setOwner] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(["TENANT"]);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [moreMember, setMoreMember] = useState<Member | null>(null);
   const vm = useWorkspace(org, building, page);
   const action = useAction();
   const commands = useAdminCommands();
@@ -130,9 +134,13 @@ export function WorkspacePage({ org }: { org: string }) {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+          gridTemplateColumns: {
+            xs: "repeat(2, minmax(0, 1fr))",
+            sm: "repeat(3, 1fr)",
+          },
           gap: 2,
           mb: 3,
+          "& > :nth-of-type(3)": { gridColumn: { xs: "1 / -1", sm: "auto" } },
         }}
       >
         <MetricCard
@@ -183,7 +191,8 @@ export function WorkspacePage({ org }: { org: string }) {
               setBuilding(e.target.value);
               setPage(0);
             }}
-            sx={{ minWidth: { md: 330 } }}
+            fullWidth
+            sx={{ width: { md: 330 } }}
           >
             <MenuItem value="">
               {vm.access.data?.owner
@@ -231,102 +240,125 @@ export function WorkspacePage({ org }: { org: string }) {
             <Alert severity="error">{vm.members.error.message}</Alert>
           )}
           <Stack spacing={1.25} sx={{ my: 2 }}>
-            {vm.members.data?.map((m) => (
-              <Paper
-                key={m.account_id}
-                sx={{
-                  p: 2.5,
-                  transition: "border-color .2s, transform .2s",
-                  "&:hover": {
-                    borderColor: "#B8D6CE",
-                    transform: "translateY(-1px)",
-                  },
-                }}
-              >
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={2}
-                  sx={{ justifyContent: "space-between", alignItems: "center" }}
+            {vm.members.data?.map((m) => {
+              const isSelf = m.account_id === currentUserId;
+              return (
+                <Paper
+                  key={m.account_id}
+                  sx={{
+                    p: 2.5,
+                    transition: "border-color .2s, transform .2s",
+                    "&:hover": {
+                      borderColor: "#B8D6CE",
+                      transform: "translateY(-1px)",
+                    },
+                  }}
                 >
-                  <Box
+                  <Stack
+                    direction="row"
+                    spacing={2}
                     sx={{
-                      width: 44,
-                      height: 44,
-                      flexShrink: 0,
-                      borderRadius: "50%",
-                      bgcolor: "primary.light",
-                      color: "primary.main",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 850,
+                      alignItems: "center",
+                      flexWrap: { xs: "wrap", md: "nowrap" },
                     }}
                   >
-                    {m.display_name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </Box>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="h6">{m.display_name}</Typography>
-                    <Typography color="text.secondary">{m.email}</Typography>
-                  </Box>
-                  {m.owner ? (
-                    <Chip
-                      label="Organization owner"
-                      color="secondary"
-                      variant="outlined"
-                    />
-                  ) : (
-                    <StatusChip
-                      active={m.status === "ACTIVE"}
-                      label={m.status}
-                    />
-                  )}
-                  {building && (
-                    <Button variant="outlined" onClick={() => setEditing(m)}>
-                      Building roles
-                    </Button>
-                  )}
-                  {vm.access.data?.owner && (
-                    <>
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        flexShrink: 0,
+                        borderRadius: "50%",
+                        bgcolor: "primary.light",
+                        color: "primary.main",
+                        display: "grid",
+                        placeItems: "center",
+                        fontWeight: 850,
+                      }}
+                    >
+                      {m.display_name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </Box>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="h6">{m.display_name}</Typography>
+                      <Typography color="text.secondary">{m.email}</Typography>
+                    </Box>
+                    {m.owner ? (
+                      <Chip
+                        label="Organization owner"
+                        color="secondary"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <StatusChip
+                        active={m.status === "ACTIVE"}
+                        label={m.status}
+                      />
+                    )}
+                    {isSelf && <Chip label="You" size="small" />}
+                    {building && !isSelf && (
                       <Button
-                        disabled={action.busy}
-                        onClick={() =>
-                          void action.run(() =>
-                            commands.membership(
-                              org,
-                              m.account_id,
-                              !m.owner,
-                              false,
-                            ),
-                          )
-                        }
+                        variant="outlined"
+                        sx={{ display: { xs: "none", md: "flex" } }}
+                        onClick={() => setEditing(m)}
                       >
-                        {m.owner ? "Remove owner role" : "Make owner"}
+                        Building roles
                       </Button>
+                    )}
+                    {vm.access.data?.owner && !isSelf && (
+                      <>
+                        <Button
+                          sx={{ display: { xs: "none", md: "flex" } }}
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              commands.membership(
+                                org,
+                                m.account_id,
+                                !m.owner,
+                                false,
+                              ),
+                            )
+                          }
+                        >
+                          {m.owner ? "Remove owner role" : "Make owner"}
+                        </Button>
+                        <Button
+                          color="error"
+                          sx={{ display: { xs: "none", md: "flex" } }}
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              commands.membership(
+                                org,
+                                m.account_id,
+                                m.owner,
+                                true,
+                              ),
+                            )
+                          }
+                        >
+                          Remove membership
+                        </Button>
+                      </>
+                    )}
+                    {(building || vm.access.data?.owner) && !isSelf && (
                       <Button
-                        color="error"
-                        disabled={action.busy}
-                        onClick={() =>
-                          void action.run(() =>
-                            commands.membership(
-                              org,
-                              m.account_id,
-                              m.owner,
-                              true,
-                            ),
-                          )
-                        }
+                        fullWidth
+                        variant="outlined"
+                        sx={{ display: { xs: "flex", md: "none" } }}
+                        onClick={() => setMoreMember(m)}
                       >
-                        Remove membership
+                        More actions
                       </Button>
-                    </>
-                  )}
-                </Stack>
-              </Paper>
-            ))}
+                    )}
+                  </Stack>
+                </Paper>
+              );
+            })}
           </Stack>
           <Pager
             page={page}
@@ -343,7 +375,62 @@ export function WorkspacePage({ org }: { org: string }) {
           </Typography>
         </Paper>
       )}
-      <Dialog
+      <ActionSheet
+        open={!!moreMember}
+        onClose={() => setMoreMember(null)}
+        title={moreMember?.display_name ?? "Member actions"}
+      >
+        {building && moreMember && moreMember.account_id !== currentUserId && (
+          <Button
+            onClick={() => {
+              setEditing(moreMember);
+              setMoreMember(null);
+            }}
+          >
+            Building roles
+          </Button>
+        )}
+        {vm.access.data?.owner &&
+          moreMember &&
+          moreMember.account_id !== currentUserId && (
+            <>
+              <Button
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await commands.membership(
+                      org,
+                      moreMember.account_id,
+                      !moreMember.owner,
+                      false,
+                    );
+                    setMoreMember(null);
+                  })
+                }
+              >
+                {moreMember.owner ? "Remove owner role" : "Make owner"}
+              </Button>
+              <Button
+                color="error"
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await commands.membership(
+                      org,
+                      moreMember.account_id,
+                      moreMember.owner,
+                      true,
+                    );
+                    setMoreMember(null);
+                  })
+                }
+              >
+                Remove membership
+              </Button>
+            </>
+          )}
+      </ActionSheet>
+      <AdaptiveDialog
         open={newBuilding}
         onClose={() => setNewBuilding(false)}
         fullWidth
@@ -366,8 +453,8 @@ export function WorkspacePage({ org }: { org: string }) {
             />
           </Box>
         </DialogContent>
-      </Dialog>
-      <Dialog
+      </AdaptiveDialog>
+      <AdaptiveDialog
         open={invite}
         onClose={() => setInvite(false)}
         fullWidth
@@ -438,8 +525,8 @@ export function WorkspacePage({ org }: { org: string }) {
             label="Add member"
           />
         </DialogContent>
-      </Dialog>
-      {editing && (
+      </AdaptiveDialog>
+      {editing && editing.account_id !== currentUserId && (
         <RoleDialog
           org={org}
           building={building}

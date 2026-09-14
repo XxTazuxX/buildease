@@ -12,7 +12,12 @@ export function Pager({
     <Stack
       direction="row"
       spacing={1.5}
-      sx={{ alignItems: "center", justifyContent: "flex-end", my: 2.5 }}
+      sx={{
+        alignItems: "center",
+        justifyContent: { xs: "space-between", sm: "flex-end" },
+        my: 2.5,
+        "& .MuiButton-root": { px: { xs: 1.25, sm: 2.25 } },
+      }}
     >
       <Button
         variant="outlined"

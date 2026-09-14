@@ -7,7 +7,6 @@ import {
   Chip,
   Checkbox,
   FormControlLabel,
-  Dialog,
   DialogContent,
   DialogTitle,
   Divider,
@@ -30,12 +29,20 @@ import {
   PageHeader,
   StatusChip,
 } from "@/shared/components/Surface";
+import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
+
+type MoreTarget =
+  | { kind: "organization"; item: Organization }
+  | { kind: "account"; item: Account }
+  | null;
+
 export function PlatformPage() {
   const [tab, setTab] = useState<"organizations" | "accounts">("organizations");
   const [page, setPage] = useState(0);
   const [reset, setReset] = useState<Account | null>(null);
   const [create, setCreate] = useState(false);
   const [systemAdmin, setSystemAdmin] = useState(false);
+  const [more, setMore] = useState<MoreTarget>(null);
   const query = usePlatform(tab, page);
   const action = useAction();
   const commands = useAdminCommands();
@@ -57,9 +64,13 @@ export function PlatformPage() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+          gridTemplateColumns: {
+            xs: "repeat(2, minmax(0, 1fr))",
+            sm: "repeat(3, 1fr)",
+          },
           gap: 2,
           mb: 3,
+          "& > :nth-of-type(3)": { gridColumn: { xs: "1 / -1", sm: "auto" } },
         }}
       >
         <MetricCard
@@ -118,9 +129,12 @@ export function PlatformPage() {
                 }}
               >
                 <Stack
-                  direction={{ xs: "column", md: "row" }}
+                  direction="row"
                   spacing={2}
-                  sx={{ alignItems: { xs: "stretch", md: "center" } }}
+                  sx={{
+                    alignItems: "center",
+                    flexWrap: { xs: "wrap", md: "nowrap" },
+                  }}
                 >
                   <Box
                     sx={{
@@ -143,7 +157,11 @@ export function PlatformPage() {
                     </Typography>
                   </Box>
                   <StatusChip active={o.active} />
-                  <Stack direction="row" spacing={1}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ display: { xs: "none", md: "flex" } }}
+                  >
                     <Button
                       variant="outlined"
                       component={RouterLink}
@@ -164,6 +182,14 @@ export function PlatformPage() {
                       {o.active ? "Deactivate" : "Activate"}
                     </Button>
                   </Stack>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    sx={{ display: { xs: "flex", md: "none" } }}
+                    onClick={() => setMore({ kind: "organization", item: o })}
+                  >
+                    More actions
+                  </Button>
                 </Stack>
               </Paper>
             ))
@@ -180,9 +206,12 @@ export function PlatformPage() {
                 }}
               >
                 <Stack
-                  direction={{ xs: "column", md: "row" }}
+                  direction="row"
                   spacing={2}
-                  sx={{ justifyContent: "space-between" }}
+                  sx={{
+                    alignItems: "center",
+                    flexWrap: { xs: "wrap", md: "nowrap" },
+                  }}
                 >
                   <Box
                     sx={{
@@ -221,7 +250,11 @@ export function PlatformPage() {
                   ) : (
                     <StatusChip active={a.active} />
                   )}
-                  <Stack direction="row" spacing={1}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ display: { xs: "none", md: "flex" } }}
+                  >
                     <Button variant="outlined" onClick={() => setReset(a)}>
                       Reset password
                     </Button>
@@ -237,12 +270,83 @@ export function PlatformPage() {
                       {a.active ? "Deactivate" : "Activate"}
                     </Button>
                   </Stack>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    sx={{ display: { xs: "flex", md: "none" } }}
+                    onClick={() => setMore({ kind: "account", item: a })}
+                  >
+                    More actions
+                  </Button>
                 </Stack>
               </Paper>
             ))}
       </Stack>
       <Pager page={page} count={query.data?.length || 0} onChange={setPage} />
-      <Dialog
+      <ActionSheet
+        open={!!more}
+        onClose={() => setMore(null)}
+        title={
+          more?.kind === "organization"
+            ? more.item.name
+            : more?.kind === "account"
+              ? more.item.display_name
+              : "Actions"
+        }
+      >
+        {more?.kind === "organization" && (
+          <>
+            <Button
+              component={RouterLink}
+              to={`/organizations/${more.item.id}`}
+              disabled={!more.item.active}
+              onClick={() => setMore(null)}
+            >
+              Open workspace
+            </Button>
+            <Button
+              color={more.item.active ? "error" : "primary"}
+              disabled={action.busy}
+              onClick={() =>
+                void action.run(async () => {
+                  await commands.organizationStatus(
+                    more.item.id,
+                    !more.item.active,
+                  );
+                  setMore(null);
+                })
+              }
+            >
+              {more.item.active ? "Deactivate" : "Activate"}
+            </Button>
+          </>
+        )}
+        {more?.kind === "account" && (
+          <>
+            <Button
+              onClick={() => {
+                setReset(more.item);
+                setMore(null);
+              }}
+            >
+              Reset password
+            </Button>
+            <Button
+              color={more.item.active ? "error" : "primary"}
+              disabled={action.busy}
+              onClick={() =>
+                void action.run(async () => {
+                  await commands.accountStatus(more.item.id, !more.item.active);
+                  setMore(null);
+                })
+              }
+            >
+              {more.item.active ? "Deactivate" : "Activate"}
+            </Button>
+          </>
+        )}
+      </ActionSheet>
+      <AdaptiveDialog
         open={create}
         onClose={() => setCreate(false)}
         fullWidth
@@ -308,8 +412,8 @@ export function PlatformPage() {
             />
           </Box>
         </DialogContent>
-      </Dialog>
-      <Dialog
+      </AdaptiveDialog>
+      <AdaptiveDialog
         open={!!reset}
         onClose={() => setReset(null)}
         fullWidth
@@ -338,7 +442,7 @@ export function PlatformPage() {
             label="Reset password"
           />
         </DialogContent>
-      </Dialog>
+      </AdaptiveDialog>
     </>
   );
 }

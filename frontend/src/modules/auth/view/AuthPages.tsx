@@ -19,7 +19,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100svh",
         display: "grid",
         gridTemplateColumns: {
           xs: "1fr",
@@ -112,16 +112,18 @@ function AuthShell({ children }: { children: React.ReactNode }) {
         sx={{
           display: "grid",
           placeItems: "center",
-          p: { xs: 2.5, sm: 5 },
+          minHeight: "100svh",
+          p: { xs: 2, sm: 5 },
           position: "relative",
+          overflowY: "auto",
         }}
       >
         <Box
           sx={{
             display: { xs: "block", md: "none" },
             position: "absolute",
-            top: 24,
-            left: 24,
+            top: 18,
+            left: 18,
           }}
         >
           <BrandMark />
@@ -136,7 +138,7 @@ export function LoginPage() {
   const { form, error, submit } = useLoginViewModel();
   return (
     <AuthShell>
-      <Box sx={{ width: "100%", maxWidth: 470, mt: { xs: 8, md: 0 } }}>
+      <Box sx={{ width: "100%", maxWidth: 470, mt: { xs: 6, md: 0 } }}>
         <Typography variant="overline" color="primary.main">
           Welcome to your workspace
         </Typography>
@@ -148,9 +150,14 @@ export function LoginPage() {
         </Typography>
         <Paper
           sx={{
-            p: { xs: 2.5, sm: 4 },
+            p: { xs: 2, sm: 4 },
             borderRadius: 4,
             boxShadow: "0 22px 60px rgba(22,55,51,.08)",
+            "@media (max-width:370px)": {
+              mx: -1,
+              borderRadius: 2.5,
+              boxShadow: "none",
+            },
           }}
         >
           <Stack component="form" onSubmit={submit} spacing={2.5}>
@@ -198,7 +205,7 @@ export function ChangePasswordPage() {
   const auth = useAuth();
   return (
     <AuthShell>
-      <Box sx={{ width: "100%", maxWidth: 500, mt: { xs: 8, md: 0 } }}>
+      <Box sx={{ width: "100%", maxWidth: 500, mt: { xs: 6, md: 0 } }}>
         <Typography variant="overline" color="primary.main">
           Secure your account
         </Typography>
@@ -211,9 +218,14 @@ export function ChangePasswordPage() {
         </Typography>
         <Paper
           sx={{
-            p: { xs: 2.5, sm: 4 },
+            p: { xs: 2, sm: 4 },
             borderRadius: 4,
             boxShadow: "0 22px 60px rgba(22,55,51,.08)",
+            "@media (max-width:370px)": {
+              mx: -1,
+              borderRadius: 2.5,
+              boxShadow: "none",
+            },
           }}
         >
           <Stack component="form" onSubmit={submit} spacing={2.25}>

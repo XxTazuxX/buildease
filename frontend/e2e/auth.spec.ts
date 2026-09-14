@@ -75,17 +75,23 @@ test("administrator signs in, creates an organization and manages its building",
 test("owner accepts an invitation and switches isolated organizations", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.screenshot({ path: "../.local/mobile-login.png", fullPage: true });
   await firstLogin(page, "owner@example.test");
   await page.getByRole("button", { name: "Accept invitation" }).click();
   await expect(
     page.getByText("You’re invited to South Properties"),
   ).not.toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Organization", exact: true })
-    .click();
-  await page
-    .getByRole("option", { name: "South Properties", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Organization", exact: true }).click();
+  await page.getByRole("button", { name: "South Properties", exact: true }).click();
+  const currentMember = page.locator(".MuiPaper-root").filter({
+    has: page.getByText("owner@example.test", { exact: true }),
+  });
+  await expect(currentMember.getByText("You", { exact: true })).toBeVisible();
+  await expect(
+    currentMember.getByRole("button", { name: "More actions" }),
+  ).not.toBeVisible();
   await page.getByRole("combobox", { name: "Building", exact: true }).click();
   await expect(
     page.getByRole("option", { name: "South House · SOUTH" }),
@@ -93,10 +99,17 @@ test("owner accepts an invitation and switches isolated organizations", async ({
   await expect(
     page.getByRole("option", { name: "North House · NORTH" }),
   ).not.toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: "../.local/mobile-workspace.png", fullPage: true });
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
 test("property manager delegates a tenant role without owner privileges", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
   await firstLogin(page, "manager@example.test");
   await expect(
     page.getByRole("link", { name: "Administration" }),
@@ -119,4 +132,36 @@ test("property manager delegates a tenant role without owner privileges", async 
     .getByRole("button", { name: "Add member", exact: true })
     .click();
   await expect(page.getByText("resident@example.test")).toBeVisible();
+  const member = page.locator(".MuiPaper-root").filter({
+    has: page.getByText("resident@example.test", { exact: true }),
+  });
+  await member.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: "Building roles" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByLabel("TENANT")).toBeVisible();
+  expect((await page.getByRole("dialog").boundingBox())?.width).toBe(360);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: "../.local/mobile-member.png", fullPage: true });
+});
+
+test("tablet navigation and administration use touch-friendly action sheets", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/");
+  await page.getByLabel("Email", { exact: true }).fill("admin@example.test");
+  await page.getByLabel("Password", { exact: true }).fill(permanent);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("link", { name: "Administration" }).click();
+  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
+  const organization = page.locator(".MuiPaper-root").filter({
+    has: page.getByRole("heading", { name: "East Properties", exact: true }),
+  });
+  await organization.getByRole("button", { name: "More actions" }).click();
+  await expect(page.getByRole("link", { name: "Open workspace" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("link", { name: "Open workspace" })).not.toBeVisible();
+  await expect(page.locator(".MuiDrawer-root")).not.toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: "../.local/tablet-admin.png", fullPage: true });
 });

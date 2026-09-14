@@ -8,8 +8,8 @@ frontend:
 e2e:
 	cd frontend && npm run test:e2e
 dev-backend:
-	cd backend && ./mvnw spring-boot:run
+	set -a; source .env; set +a; cd backend && ./mvnw spring-boot:run
 dev-frontend:
 	cd frontend && npm run dev
 bootstrap:
-	cd backend && ./mvnw spring-boot:run -Dspring-boot.run.arguments="--app.bootstrap=true --spring.main.web-application-type=none"
+	set -a; source .env; set +a; cd backend && ./mvnw spring-boot:run -Dspring-boot.run.arguments="--app.bootstrap=true --spring.main.web-application-type=none"

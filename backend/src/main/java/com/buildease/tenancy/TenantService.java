@@ -268,6 +268,7 @@ public class TenantService {
 
   public void membership(Actor a, UUID org, UUID user, boolean makeOwner, boolean removed) {
     owner(a, org);
+    if (a.id().equals(user)) throw ApiException.forbidden();
     var m =
         db.one(
             "select * from memberships where organization_id=? and account_id=? for update",
@@ -312,6 +313,7 @@ public class TenantService {
 
   private void replaceRolesInternal(
       Actor a, UUID org, UUID building, UUID user, Set<Role> roles, boolean owner) {
+    if (a.id().equals(user)) throw ApiException.forbidden();
     boolean manager = manager(a, org, building);
     if (!owner && !manager) throw ApiException.forbidden();
     db.one("select id from buildings where organization_id=? and id=?", org, building);

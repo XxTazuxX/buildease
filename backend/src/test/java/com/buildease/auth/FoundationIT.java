@@ -321,6 +321,35 @@ class FoundationIT {
   }
 
   @Test
+  void membersCannotChangeTheirOwnMembershipOrBuildingRoles() {
+    String ownerEmail = "self-owner-" + UUID.randomUUID() + "@example.test";
+    UUID org = organization(ownerEmail);
+    Actor owner = actor(ownerEmail);
+    UUID building =
+        (UUID) tenants.createBuilding(owner, org, "Self-service guard", "SELF").get("id");
+
+    tenants.invite(
+        owner,
+        org,
+        "second-owner-" + UUID.randomUUID() + "@example.test",
+        "Second Owner",
+        password,
+        true,
+        null,
+        Set.of());
+
+    assertThatThrownBy(() -> tenants.membership(owner, org, owner.id(), false, false))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    assertThatThrownBy(() -> tenants.membership(owner, org, owner.id(), true, true))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    assertThatThrownBy(
+            () -> tenants.replaceRoles(owner, org, building, owner.id(), Set.of(Role.TENANT)))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+
+    assertThat(tenants.overview(owner, org).get("owner")).isEqualTo(true);
+  }
+
+  @Test
   void lastPlatformAdministratorMustRemainActive() {
     var others =
         db.rows("select id from accounts where platform_admin and active and id<>?", admin.id());
