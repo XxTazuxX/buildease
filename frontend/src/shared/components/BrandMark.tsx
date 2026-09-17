@@ -1,34 +1,58 @@
 import { Box, Stack, Typography } from "@mui/material";
+import brandMark from "@/assets/buildease-mark.png";
 
-export function BrandMark({ inverse = false }: { inverse?: boolean }) {
+export function BrandMark({
+  inverse = false,
+  compact = false,
+}: {
+  inverse?: boolean;
+  compact?: boolean;
+}) {
   return (
-    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+    <Stack
+      direction="row"
+      spacing={1.25}
+      aria-label={compact ? "BuildEase" : undefined}
+      sx={{ alignItems: "center" }}
+    >
       <Box
-        aria-hidden
+        component="span"
         sx={{
-          width: 36,
-          height: 36,
+          width: 38,
+          height: 38,
           display: "grid",
           placeItems: "center",
-          borderRadius: "11px 11px 11px 3px",
-          bgcolor: inverse ? "#79C8B7" : "primary.main",
-          color: inverse ? "#0D3432" : "white",
-          fontWeight: 900,
-          fontSize: 19,
-          boxShadow: inverse ? "none" : "0 8px 18px rgba(21,94,87,.2)",
+          overflow: "hidden",
+          flexShrink: 0,
         }}
       >
-        B
+        <Box
+          component="img"
+          src={brandMark}
+          alt=""
+          aria-hidden="true"
+          sx={{
+            width: 58,
+            height: 58,
+            maxWidth: "none",
+            display: "block",
+          }}
+        />
       </Box>
-      <Typography
-        variant="h6"
-        sx={{
-          color: inverse ? "white" : "text.primary",
-          letterSpacing: "-0.03em",
-        }}
-      >
-        BuildEase
-      </Typography>
+      {!compact && (
+        <Typography
+          component="span"
+          sx={{
+            color: inverse ? "white" : "text.primary",
+            fontSize: 19,
+            fontWeight: 760,
+            lineHeight: 1,
+            letterSpacing: "-0.045em",
+          }}
+        >
+          BuildEase
+        </Typography>
+      )}
     </Stack>
   );
 }
