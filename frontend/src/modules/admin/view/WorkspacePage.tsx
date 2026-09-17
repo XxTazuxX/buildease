@@ -31,6 +31,7 @@ import {
 } from "@/shared/components/Surface";
 import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
+import { BuildingConfigurationPanel } from "@/modules/buildings";
 function RoleDialog({
   org,
   building,
@@ -212,6 +213,13 @@ export function WorkspacePage({ org }: { org: string }) {
           </Alert>
         )}
       </Paper>
+      {building && (
+        <BuildingConfigurationPanel
+          org={org}
+          building={building}
+          owner={!!vm.access.data?.owner}
+        />
+      )}
       {vm.canManage ? (
         <>
           <Stack

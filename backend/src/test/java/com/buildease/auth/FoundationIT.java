@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.buildease.building.*;
 import com.buildease.common.*;
 import com.buildease.security.*;
 import com.buildease.tenancy.*;
@@ -62,6 +63,7 @@ class FoundationIT {
   @Autowired Store db;
   @Autowired AuthService auth;
   @Autowired TenantService tenants;
+  @Autowired BuildingService buildingConfigurations;
   @Autowired PasswordEncoder passwords;
   @Autowired TransactionTemplate tx;
   @Autowired JwtDecoder decoder;
@@ -98,7 +100,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(3);
+    assertThat(flyway.info().applied()).hasSize(4);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
@@ -285,6 +287,87 @@ class FoundationIT {
     Actor owner = actor(e);
     tenants.organizationActive(admin, org, false);
     assertThatThrownBy(() -> tenants.overview(owner, org)).isInstanceOf(ApiException.class);
+  }
+
+  @Test
+  void buildingConfigurationIsOwnerControlledAndTenantIsolated() {
+    String ownerEmail = "building-owner-" + UUID.randomUUID() + "@example.test";
+    UUID organization = organization(ownerEmail);
+    Actor owner = actor(ownerEmail);
+    UUID building =
+        (UUID) tenants.createBuilding(owner, organization, "Harbor House", "HARBOR").get("id");
+    buildingConfigurations.configure(
+        owner,
+        organization,
+        building,
+        "Harbor House",
+        "10 Bay Road",
+        null,
+        "Colombo",
+        "Western",
+        "00100",
+        "lk",
+        "Asia/Colombo",
+        "lkr",
+        "+94 11 555 0100");
+    UUID level =
+        buildingConfigurations.createLevel(owner, organization, building, "Level 1", "l1", 1);
+    UUID flat =
+        buildingConfigurations.createSpace(
+            owner,
+            organization,
+            building,
+            level,
+            null,
+            "Flat 101",
+            "f101",
+            SpaceType.FLAT,
+            true,
+            new java.math.BigDecimal("82.50"),
+            5,
+            null);
+    buildingConfigurations.createSpace(
+        owner,
+        organization,
+        building,
+        level,
+        flat,
+        "Bedroom 1",
+        "f101-r1",
+        SpaceType.ROOM,
+        false,
+        new java.math.BigDecimal("14.25"),
+        2,
+        null);
+    buildingConfigurations.status(owner, organization, building, flat, SpaceStatus.MAINTENANCE);
+
+    assertThat(buildingConfigurations.building(owner, organization, building))
+        .containsEntry("timezone", "Asia/Colombo")
+        .containsEntry("currency", "LKR")
+        .containsEntry("country_code", "LK");
+    assertThat(buildingConfigurations.levels(owner, organization, building)).hasSize(1);
+    assertThat(buildingConfigurations.spaces(owner, organization, building)).hasSize(2);
+    assertThatThrownBy(
+            () ->
+                buildingConfigurations.status(
+                    owner, organization, building, flat, SpaceStatus.OCCUPIED))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+
+    String tenantEmail = "building-tenant-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        owner, organization, tenantEmail, "Tenant", password, false, building, Set.of(Role.TENANT));
+    Actor tenant = actor(tenantEmail);
+    assertThat(buildingConfigurations.spaces(tenant, organization, building)).hasSize(2);
+    assertThatThrownBy(
+            () ->
+                buildingConfigurations.createLevel(
+                    tenant, organization, building, "Forbidden", "NO", 2))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+
+    UUID otherOrganization =
+        organization("isolated-building-" + UUID.randomUUID() + "@example.test");
+    assertThatThrownBy(() -> buildingConfigurations.spaces(tenant, otherOrganization, building))
+        .isInstanceOf(ApiException.class);
   }
 
   @Test

@@ -51,10 +51,29 @@ test("administrator signs in, creates an organization and manages its building",
     .getByRole("button", { name: "Add building", exact: true })
     .click();
   await page.getByRole("combobox", { name: "Building", exact: true }).click();
+  await page.getByRole("option", { name: "East House · EAST" }).click();
   await expect(
-    page.getByRole("option", { name: "East House · EAST" }),
+    page.getByRole("heading", { name: "Building configuration" }),
   ).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Add level", exact: true }).click();
+  await page.getByLabel("Level name").fill("Level 1");
+  await page.getByLabel("Level code").fill("L1");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add level", exact: true })
+    .click();
+  await expect(page.getByText("L1 · Order 0")).toBeVisible();
+  await page.getByRole("button", { name: "Add space", exact: true }).click();
+  await page.getByLabel("Space name").fill("Flat 101");
+  await page.getByLabel("Space code").fill("F101");
+  await page.getByLabel("Level or zone").click();
+  await page.getByRole("option", { name: "Level 1" }).click();
+  await page.getByLabel("Area (m²)").fill("82.5");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add space", exact: true })
+    .click();
+  await expect(page.getByText("F101 · FLAT")).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Sign out", exact: true }),
