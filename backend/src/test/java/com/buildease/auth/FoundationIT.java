@@ -100,7 +100,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(4);
+    assertThat(flyway.info().applied()).hasSize(9);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
@@ -430,6 +430,39 @@ class FoundationIT {
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
 
     assertThat(tenants.overview(owner, org).get("owner")).isEqualTo(true);
+  }
+
+  @Test
+  void ownerCanEditOrganizationMemberAndAssignRolesInASelectedBuilding() {
+    String ownerEmail = "member-owner-" + UUID.randomUUID() + "@example.test";
+    UUID org = organization(ownerEmail);
+    Actor owner = actor(ownerEmail);
+    UUID building =
+        (UUID) tenants.createBuilding(owner, org, "Member operations", "MEMBERS").get("id");
+    String memberEmail = "member-" + UUID.randomUUID() + "@example.test";
+    UUID memberId =
+        (UUID)
+            tenants
+                .invite(owner, org, memberEmail, "Global identity", password, false, null, Set.of())
+                .get("id");
+
+    assertThat(tenants.members(owner, org, building, 0))
+        .extracting(row -> row.get("account_id"))
+        .contains(memberId);
+    tenants.updateMemberProfile(owner, org, memberId, "Building display name");
+    tenants.replaceRoles(owner, org, building, memberId, Set.of(Role.TENANT));
+
+    assertThat(tenants.members(owner, org, building, 0))
+        .anySatisfy(
+            row ->
+                assertThat(row)
+                    .containsEntry("account_id", memberId)
+                    .containsEntry("display_name", "Building display name"));
+    assertThat(db.one("select display_name from accounts where id=?", memberId))
+        .containsEntry("display_name", "Global identity");
+    assertThatThrownBy(
+            () -> tenants.updateMemberProfile(actor(memberEmail), org, memberId, "Unauthorized"))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
 
   @Test

@@ -22,6 +22,7 @@ public final class RolePolicy {
       case MAINTENANCE_STAFF -> Set.of("self:read", "maintenance:assigned");
       case SECURITY_OPERATIONS_STAFF -> Set.of("self:read", "operations:write");
       case TENANT -> Set.of("self:read", "occupancy:own", "billing:own", "requests:own");
+      case VENDOR -> Set.of("self:read", "maintenance:assigned");
     };
   }
 }

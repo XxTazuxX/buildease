@@ -1,6 +1,6 @@
 # BuildEase
 
-Java 21 / Spring Boot and React / TypeScript building-management foundation with JWT authentication, organization isolation, delegated building roles, and Flyway migrations.
+Java 21 / Spring Boot and React / TypeScript building-operations platform with self-service identity, organization isolation, occupancy history, maintenance workflows, notifications, private photo storage, and an installable PWA.
 
 ## Local verification (no Neon credentials needed)
 
@@ -38,7 +38,7 @@ make dev-backend
 make dev-frontend
 ```
 
-Open port 5173. Vite proxies `/api` to port 8080. Create organizations and initial owners through Administration; deliver new-account temporary passwords privately. Existing users accept invitations after login. Owners manage buildings and memberships; property managers delegate only permitted roles in assigned buildings.
+Open port 5173. Vite proxies `/api` to port 8080. Owners can register and verify an organization through transactional email; platform administration remains available for managed provisioning. Configure SMTP, private S3-compatible storage, VAPID, and scheduled-worker settings with the names in [.env.example](.env.example). Existing users accept invitations after login. Owners manage buildings, residents, occupancy, and maintenance; property managers act only in assigned buildings.
 
 ## Schema and deployment
 
@@ -48,7 +48,7 @@ Before deployment: run verification, review the next migration, take a Neon bran
 
 A failed startup/migration must block rollout. Check a non-secret startup log, GET `/api/auth/csrf`, and a designated administrator login/profile/logout smoke flow. Do not include tokens, cookies, credential-bearing URLs, or passwords in logs or support reports. Audit events record actor, target, action, organization, and time without credentials.
 
-The initial implementation is not a subscription/billing platform: public signup, email delivery/recovery, MFA, and operational lease/billing/maintenance modules are outside this release. Platform administrators can reset expired temporary passwords; retain more than one active administrator for recovery.
+The maintenance-first release intentionally excludes subscriptions, billing, leases, rent collection, security patrols, utilities, SMS, native mobile apps, and AI-assisted operations. Transactional email is limited to identity and invitation workflows. Web push subscriptions are stored, while production push delivery still requires a VAPID-capable delivery adapter.
 
 - [API contracts](docs/api/authentication.md)
 - [Security boundaries and role model](docs/architecture/authentication.md)

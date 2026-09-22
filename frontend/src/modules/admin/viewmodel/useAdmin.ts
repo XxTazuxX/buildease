@@ -50,12 +50,19 @@ export function useWorkspace(org: string, building: string, page: number) {
     access.data?.roles.some(
       (r) => r.building_id === building && r.role === "PROPERTY_MANAGER",
     );
+  const canManageFinance =
+    access.data?.owner ||
+    access.data?.roles.some(
+      (r) =>
+        r.building_id === building &&
+        (r.role === "PROPERTY_MANAGER" || r.role === "ACCOUNTANT"),
+    );
   const members = useQuery({
     queryKey: [org, "members", building, page],
     queryFn: () => adminApi.members(org, building, page),
     enabled: !!canManage,
   });
-  return { access, buildings, members, canManage };
+  return { access, buildings, members, canManage, canManageFinance };
 }
 export function useRoleEditor(org: string, building: string, user: string) {
   const query = useQuery({
@@ -92,6 +99,7 @@ export function useAdminCommands() {
       await cache.invalidateQueries();
     },
     membership: adminApi.membership,
+    updateMember: adminApi.updateMember,
     accept: adminApi.accept,
   };
 }

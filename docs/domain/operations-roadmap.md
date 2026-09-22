@@ -2,6 +2,8 @@
 
 Each phase is independently deployable. Every phase adds forward-only Flyway migrations, keeps prior APIs compatible, and runs its own tests together with all earlier tests.
 
+The maintenance-first slice now includes resident records and time-bounded assignments, request triage and resolution, staff/vendor work orders, work logs and costs, recurring plans, SLA deadlines, notifications, private photos, and PWA installation. Broader screening, lease, and reporting scope below remains incremental.
+
 - [x] Phase 1 — Building profiles, levels/zones, flexible spaces, controlled space status, owner configuration, and tenant-isolated read access.
 - [ ] Phase 2 — Tenant applications, consented screening checklists, tenant records, household occupants, and assignment readiness.
 - [ ] Phase 3 — Lease drafts, activation, renewal, transfer, notice, move-out, occupancy history, deposits, and private documents.

@@ -207,14 +207,15 @@ public class TenantService {
     if (!owner && (building == null || !manager(a, org, building))) throw ApiException.forbidden();
     if (building == null) {
       return db.rows(
-          "select m.account_id,a.email,a.display_name,m.owner,m.status from memberships m join accounts a on a.id=m.account_id where m.organization_id=? and m.status<>'REMOVED' order by a.email limit 50 offset ?",
+          "select m.account_id,a.email,coalesce(m.display_name,a.display_name) display_name,m.owner,m.status from memberships m join accounts a on a.id=m.account_id where m.organization_id=? and m.status<>'REMOVED' order by a.email limit 50 offset ?",
           org,
           offset(page));
     }
     db.one("select id from buildings where id=? and organization_id=?", building, org);
     return db.rows(
-        "select m.account_id,a.email,a.display_name,m.owner,m.status from memberships m join accounts a on a.id=m.account_id where m.organization_id=? and m.status<>'REMOVED' and exists(select 1 from building_roles r where r.organization_id=m.organization_id and r.account_id=m.account_id and r.building_id=?) order by a.email limit 50 offset ?",
+        "select m.account_id,a.email,coalesce(m.display_name,a.display_name) display_name,m.owner,m.status from memberships m join accounts a on a.id=m.account_id where m.organization_id=? and m.status<>'REMOVED' and (? or exists(select 1 from building_roles r where r.organization_id=m.organization_id and r.account_id=m.account_id and r.building_id=?)) order by a.email limit 50 offset ?",
         org,
+        owner,
         building,
         offset(page));
   }
@@ -264,6 +265,20 @@ public class TenantService {
         a.id(),
         org);
     db.audit(a.id(), org, "INVITATION_ACCEPTED", a.id());
+  }
+
+  public void updateMemberProfile(Actor actor, UUID organization, UUID user, String displayName) {
+    owner(actor, organization);
+    db.one(
+        "select 1 from memberships where organization_id=? and account_id=? and status<>'REMOVED' for update",
+        organization,
+        user);
+    db.update(
+        "update memberships set display_name=? where organization_id=? and account_id=?",
+        displayName.trim(),
+        organization,
+        user);
+    db.audit(actor.id(), organization, "MEMBER_PROFILE_CHANGED", user);
   }
 
   public void membership(Actor a, UUID org, UUID user, boolean makeOwner, boolean removed) {

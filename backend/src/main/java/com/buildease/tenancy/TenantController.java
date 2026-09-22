@@ -44,6 +44,8 @@ public class TenantController {
       UUID buildingId,
       @NotNull Set<Role> roles) {}
 
+  public record MemberProfile(@NotBlank @Size(max = 120) String displayName) {}
+
   public record Membership(boolean owner, boolean removed) {}
 
   public record Roles(@NotNull Set<Role> roles) {}
@@ -125,6 +127,15 @@ public class TenantController {
         b.owner(),
         b.buildingId(),
         b.roles());
+  }
+
+  @PatchMapping("/organizations/{org}/members/{user}/profile")
+  void memberProfile(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID org,
+      @PathVariable UUID user,
+      @Valid @RequestBody MemberProfile body) {
+    service.updateMemberProfile(actor, org, user, body.displayName());
   }
 
   @PatchMapping("/organizations/{org}/members/{user}")

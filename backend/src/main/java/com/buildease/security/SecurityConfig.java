@@ -75,7 +75,11 @@ public class SecurityConfig {
                         "/api/auth/csrf",
                         "/api/auth/login",
                         "/api/auth/refresh",
-                        "/api/auth/logout")
+                        "/api/auth/logout",
+                        "/api/auth/register",
+                        "/api/auth/verify",
+                        "/api/auth/forgot-password",
+                        "/api/auth/reset-password")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

@@ -4,7 +4,7 @@ Identity is global; normalized email identifies one account. Organization member
 
 The platform role is System Administrator. Organization owners manage their organization's buildings and membership. Property Managers grant Accountant, Maintenance Staff, Security / Operations Staff, and Tenant roles only in assigned buildings. They cannot change owners/managers or globally reset/disable accounts. The final active owner and platform administrator are protected. Existing-account additions require acceptance and preserve credentials. New accounts start active with a 24-hour temporary password.
 
-Future domain endpoints must combine `RolePolicy` permissions with resource ownership or assignment checks: `billing:own` is not permission to read other tenants' invoices, and `maintenance:assigned` requires an actual work assignment. This release exposes no billing or maintenance endpoints.
+Domain endpoints combine `RolePolicy` permissions with resource ownership or assignment checks: residents are limited to their current household space and request history, maintenance staff to assigned work, and vendors to linked vendor work orders. Frontend route visibility is never an authorization boundary.
 
 ## Authentication
 

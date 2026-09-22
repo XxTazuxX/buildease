@@ -108,9 +108,17 @@ test("owner accepts an invitation and switches isolated organizations", async ({
     has: page.getByText("owner@example.test", { exact: true }),
   });
   await expect(currentMember.getByText("You", { exact: true })).toBeVisible();
+  await currentMember.getByRole("button", { name: "More actions" }).click();
   await expect(
-    currentMember.getByRole("button", { name: "More actions" }),
+    page.getByRole("button", { name: "Edit member" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Remove membership" }),
   ).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Building roles" }),
+  ).not.toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("combobox", { name: "Building", exact: true }).click();
   await expect(
     page.getByRole("option", { name: "South House · SOUTH" }),

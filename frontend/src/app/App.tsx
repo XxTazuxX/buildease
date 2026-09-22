@@ -39,6 +39,7 @@ import {
   useAdminCommands,
 } from "@/modules/admin/viewmodel/useAdmin";
 import { BrandMark } from "@/shared/components/BrandMark";
+import { OfflineNotice } from "@/shared/components/OfflineNotice";
 import { PageHeader } from "@/shared/components/Surface";
 import { ActionSheet, Glyph } from "@/shared/components/Responsive";
 
@@ -309,6 +310,7 @@ export default function App() {
             {profile.platform_admin
               ? "Create an organization from Administration to begin."
               : "No active organizations yet. Contact your administrator or accept an invitation above."}
+            <OfflineNotice />
           </Typography>
         </Paper>
       )}

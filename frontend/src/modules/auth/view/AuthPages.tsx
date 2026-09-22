@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { OnboardingForm, type OnboardingMode } from "@/modules/onboarding";
 import {
   Alert,
   Box,
@@ -136,6 +138,24 @@ function AuthShell({ children }: { children: React.ReactNode }) {
 
 export function LoginPage() {
   const { form, error, submit } = useLoginViewModel();
+  const initialMode = window.location.pathname.endsWith("/verify")
+    ? "verify"
+    : window.location.pathname.endsWith("/reset-password")
+      ? "reset"
+      : null;
+  const [mode, setMode] = useState<OnboardingMode | null>(initialMode);
+  if (mode)
+    return (
+      <AuthShell>
+        <OnboardingForm
+          mode={mode}
+          back={() => {
+            window.history.replaceState({}, "", "/");
+            setMode(null);
+          }}
+        />
+      </AuthShell>
+    );
   return (
     <AuthShell>
       <Box sx={{ width: "100%", maxWidth: 470, mt: { xs: 6, md: 0 } }}>
@@ -193,7 +213,13 @@ export function LoginPage() {
           color="text.secondary"
           sx={{ mt: 3, textAlign: "center" }}
         >
-          Need access? Contact your organization administrator.
+          <Button onClick={() => setMode("register")}>
+            Create an owner workspace
+          </Button>
+          <Typography component="span" sx={{ mx: 0.5 }}>
+            ·
+          </Typography>
+          <Button onClick={() => setMode("forgot")}>Forgot password?</Button>
         </Typography>
       </Box>
     </AuthShell>

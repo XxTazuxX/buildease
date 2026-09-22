@@ -8,6 +8,10 @@ All routes use JSON under `/api`. Error responses contain `message`; credentials
 | POST /auth/login | email, password → accessToken, mustChangePassword; refresh cookie |
 | POST /auth/refresh | Refresh cookie → rotated cookie and accessToken |
 | POST /auth/logout | Revokes refresh/access session and deletes cookie |
+| POST /auth/register | ownerName, organizationName, email, password; sends a verification link |
+| POST /auth/verify | one-time token; atomically creates the owner account and organization |
+| POST /auth/forgot-password | email; returns a generic response and sends a reset link when eligible |
+| POST /auth/reset-password | one-time token, password; revokes existing sessions |
 | GET /auth/me | Safe profile and active/pending organizations |
 | POST /auth/change-password | oldPassword, newPassword; revokes all sessions |
 | GET, POST /platform/organizations | List; create with name, ownerEmail, ownerName, temporaryPassword for new owner |
@@ -20,10 +24,11 @@ All routes use JSON under `/api`. Error responses contain `message`; credentials
 | GET /organizations/{org}/members | Optional buildingId; required for managers |
 | POST /organizations/{org}/members | email, name, temporaryPassword for new account, owner, buildingId or null, roles array |
 | PATCH /organizations/{org}/members/{user} | owner, removed; organization owners only |
+| PATCH /organizations/{org}/members/{user}/profile | displayName; organization-scoped member name, owners only |
 | POST /organizations/{org}/invitations/accept | Accept current account's pending membership |
 | GET, PUT /organizations/{org}/buildings/{building}/members/{user}/roles | Read or replace roles array |
 | GET /organizations/{org}/audit | Owner-only organization audit list |
 
-Building roles: PROPERTY_MANAGER, ACCOUNTANT, MAINTENANCE_STAFF, SECURITY_OPERATIONS_STAFF, TENANT. Owners and platform admins are not assignable through building-role endpoints. Re-adding an existing organization member to a building preserves organization membership and credentials. Inviting an existing global account into a new organization creates PENDING membership; only that user can accept.
+Building roles: PROPERTY_MANAGER, ACCOUNTANT, MAINTENANCE_STAFF, SECURITY_OPERATIONS_STAFF, TENANT, VENDOR. Owners and platform admins are not assignable through building-role endpoints. Vendor and resident access is further restricted to assigned work and current household space resources. Re-adding an existing organization member to a building preserves organization membership and credentials. Inviting an existing global account into a new organization creates PENDING membership; only that user can accept.
 
-Temporary passwords require 15–64 Unicode characters and at most 72 UTF-8 bytes. They are never returned by the API: the creating administrator supplies and privately delivers them. Expired temporary passwords need a platform-admin reset. There is no email recovery or public signup in this release.
+Passwords require 15–64 Unicode characters and at most 72 UTF-8 bytes. Temporary passwords are never returned by the API. Self-service registration, verification, and recovery use expiring, hashed, single-use tokens delivered by transactional email; recovery responses do not disclose whether an account exists.

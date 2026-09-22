@@ -106,6 +106,10 @@ export async function api<T>(
     }
   }
 }
+export function publicApi<T>(path: string, method = "GET", body?: unknown) {
+  return request<T>(path, method, body, false);
+}
+
 export async function login(email: string, password: string) {
   const tokens = await request<Tokens>(
     "/auth/login",

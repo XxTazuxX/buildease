@@ -8,6 +8,12 @@ import { theme } from "@/app/theme";
 const query = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15000 } },
 });
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener(
+    "load",
+    () => void navigator.serviceWorker.register("/sw.js"),
+  );
+}
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ThemeProvider theme={theme}>
     <CssBaseline />

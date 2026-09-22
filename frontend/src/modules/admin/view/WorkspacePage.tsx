@@ -16,6 +16,9 @@ import {
   Typography,
 } from "@mui/material";
 import { roles, type Role, type Member } from "../model/admin";
+import { MaintenancePanel } from "@/modules/maintenance";
+import { LeasesPanel } from "@/modules/leases";
+import { OccupancyPanel } from "@/modules/occupancy";
 import {
   useWorkspace,
   useAction,
@@ -104,6 +107,10 @@ export function WorkspacePage({ org }: { org: string }) {
   const [owner, setOwner] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(["TENANT"]);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [memberProfile, setMemberProfile] = useState<{
+    member: Member;
+    displayName: string;
+  } | null>(null);
   const [moreMember, setMoreMember] = useState<Member | null>(null);
   const vm = useWorkspace(org, building, page);
   const action = useAction();
@@ -214,11 +221,31 @@ export function WorkspacePage({ org }: { org: string }) {
         )}
       </Paper>
       {building && (
-        <BuildingConfigurationPanel
-          org={org}
-          building={building}
-          owner={!!vm.access.data?.owner}
-        />
+        <>
+          <MaintenancePanel
+            org={org}
+            building={building}
+            canManage={!!vm.canManage}
+          />
+          <LeasesPanel
+            org={org}
+            building={building}
+            canManage={!!vm.canManage}
+            canManageFinance={!!vm.canManageFinance}
+          />
+          {vm.canManage && (
+            <OccupancyPanel
+              org={org}
+              building={building}
+              members={vm.members.data ?? []}
+            />
+          )}
+          <BuildingConfigurationPanel
+            org={org}
+            building={building}
+            owner={!!vm.access.data?.owner}
+          />
+        </>
       )}
       {vm.canManage ? (
         <>
@@ -307,6 +334,19 @@ export function WorkspacePage({ org }: { org: string }) {
                       />
                     )}
                     {isSelf && <Chip label="You" size="small" />}
+                    {vm.access.data?.owner && (
+                      <Button
+                        sx={{ display: { xs: "none", md: "flex" } }}
+                        onClick={() =>
+                          setMemberProfile({
+                            member: m,
+                            displayName: m.display_name,
+                          })
+                        }
+                      >
+                        Edit member
+                      </Button>
+                    )}
                     {building && !isSelf && (
                       <Button
                         variant="outlined"
@@ -353,7 +393,7 @@ export function WorkspacePage({ org }: { org: string }) {
                         </Button>
                       </>
                     )}
-                    {(building || vm.access.data?.owner) && !isSelf && (
+                    {((building && !isSelf) || vm.access.data?.owner) && (
                       <Button
                         fullWidth
                         variant="outlined"
@@ -388,6 +428,19 @@ export function WorkspacePage({ org }: { org: string }) {
         onClose={() => setMoreMember(null)}
         title={moreMember?.display_name ?? "Member actions"}
       >
+        {vm.access.data?.owner && moreMember && (
+          <Button
+            onClick={() => {
+              setMemberProfile({
+                member: moreMember,
+                displayName: moreMember.display_name,
+              });
+              setMoreMember(null);
+            }}
+          >
+            Edit member
+          </Button>
+        )}
         {building && moreMember && moreMember.account_id !== currentUserId && (
           <Button
             onClick={() => {
@@ -534,6 +587,51 @@ export function WorkspacePage({ org }: { org: string }) {
           />
         </DialogContent>
       </AdaptiveDialog>
+      {memberProfile && (
+        <AdaptiveDialog
+          open
+          onClose={() => setMemberProfile(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Edit organization member</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Display name"
+                value={memberProfile.displayName}
+                onChange={(event) =>
+                  setMemberProfile({
+                    ...memberProfile,
+                    displayName: event.target.value,
+                  })
+                }
+                slotProps={{ htmlInput: { maxLength: 120 } }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {memberProfile.member.email}
+              </Typography>
+              <Button
+                variant="contained"
+                disabled={action.busy || !memberProfile.displayName.trim()}
+                onClick={() =>
+                  void action.run(async () => {
+                    await commands.updateMember(
+                      org,
+                      memberProfile.member.account_id,
+                      memberProfile.displayName,
+                    );
+                    setMemberProfile(null);
+                  })
+                }
+              >
+                Save member
+              </Button>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
       {editing && editing.account_id !== currentUserId && (
         <RoleDialog
           org={org}

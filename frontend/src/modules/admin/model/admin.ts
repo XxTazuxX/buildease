@@ -5,6 +5,7 @@ export const roles = [
   "MAINTENANCE_STAFF",
   "SECURITY_OPERATIONS_STAFF",
   "TENANT",
+  "VENDOR",
 ] as const;
 export type Role = (typeof roles)[number];
 export interface Organization {
@@ -63,6 +64,10 @@ export const adminApi = {
     api(`/organizations/${org}/members`, "POST", body),
   membership: (org: string, user: string, owner: boolean, removed: boolean) =>
     api(`/organizations/${org}/members/${user}`, "PATCH", { owner, removed }),
+  updateMember: (org: string, user: string, displayName: string) =>
+    api(`/organizations/${org}/members/${user}/profile`, "PATCH", {
+      displayName,
+    }),
   getRoles: (org: string, building: string, user: string) =>
     api<{ role: Role }[]>(
       `/organizations/${org}/buildings/${building}/members/${user}/roles`,

@@ -29,6 +29,7 @@ public class E2eServer {
             + runtimePassword
             + "' nosuperuser nobypassrls");
     var settings = new LinkedHashMap<String, String>();
+    settings.put("server.port", System.getenv().getOrDefault("E2E_BACKEND_PORT", "8080"));
     settings.put("spring.datasource.url", postgres.getJdbcUrl());
     settings.put("spring.datasource.username", "buildease_runtime");
     settings.put("spring.datasource.password", runtimePassword);
