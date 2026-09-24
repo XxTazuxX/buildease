@@ -43,7 +43,7 @@ public class AuthService {
     }
   }
 
-  private String opaque() {
+  public String opaque() {
     byte[] b = new byte[32];
     random.nextBytes(b);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
@@ -163,6 +163,8 @@ public class AuthService {
   @Transactional(readOnly = true)
   public Actor authenticate(Jwt token) {
     UUID id = UUID.fromString(token.getSubject());
+    String imp = token.getClaimAsString("imp");
+    if (imp != null) return authenticateImpersonation(id, UUID.fromString(imp));
     UUID sid = UUID.fromString(token.getClaimAsString("sid"));
     var a =
         db.find(
@@ -175,6 +177,44 @@ public class AuthService {
         id, sid, (boolean) a.get("platform_admin"), (boolean) a.get("must_change_password"));
   }
 
+  private Actor authenticateImpersonation(UUID target, UUID impersonationSessionId) {
+    var session =
+        db.find(
+                "select admin_account_id from impersonation_sessions where id=? and target_account_id=? and ended_at is null",
+                impersonationSessionId,
+                target)
+            .orElseThrow(this::denied);
+    UUID admin = Store.id(session, "admin_account_id");
+    if (db.find("select 1 from accounts where id=? and active and platform_admin", admin).isEmpty())
+      throw denied();
+    // Unlike a normal login, impersonation never relies on the target's own password/credential
+    // state, so an expired or pending temporary password must not block an admin from viewing
+    // as them.
+    var a =
+        db.find("select * from accounts where id=? and active", target).orElseThrow(this::denied);
+    return new Actor(
+        target,
+        impersonationSessionId,
+        (boolean) a.get("platform_admin"),
+        (boolean) a.get("must_change_password"),
+        admin);
+  }
+
+  public String issueImpersonationAccessToken(UUID targetAccountId, UUID impersonationSessionId) {
+    Instant now = Instant.now();
+    JwtClaimsSet claims =
+        JwtClaimsSet.builder()
+            .issuer("buildease")
+            .audience(List.of("buildease-api"))
+            .subject(targetAccountId.toString())
+            .issuedAt(now)
+            .expiresAt(now.plusSeconds(600))
+            .claim("imp", impersonationSessionId.toString())
+            .build();
+    return jwt.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+        .getTokenValue();
+  }
+
   @Transactional
   public void logout(String refresh, Actor actor) {
     if (refresh != null)
@@ -182,7 +222,7 @@ public class AuthService {
           "update auth_sessions set revoked=true where id in (select session_id from refresh_tokens where token_hash=?)",
           hash(refresh));
     if (actor != null) {
-      db.context(actor.id(), null);
+      db.context(actor.id(), null, actor.impersonatedBy());
       db.update("update auth_sessions set revoked=true where id=?", actor.sessionId());
       db.audit(actor.id(), null, "LOGOUT", actor.id());
     }
@@ -195,7 +235,7 @@ public class AuthService {
     if (!passwords.matches(oldPassword, (String) a.get("password_hash"))) throw denied();
     if (passwords.matches(newPassword, (String) a.get("password_hash")))
       throw new ApiException(400, "Choose a different password");
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     db.update(
         "update accounts set password_hash=?,must_change_password=false,temporary_password_expires_at=null where id=?",
         passwords.encode(newPassword),
@@ -206,7 +246,7 @@ public class AuthService {
 
   @Transactional(readOnly = true)
   public Map<String, Object> me(Actor actor) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     var result =
         new LinkedHashMap<>(
             db.one(

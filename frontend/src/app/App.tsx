@@ -158,12 +158,14 @@ function ProfilePage({
   initials,
   platformAdmin,
   membershipCount,
+  canChangePassword,
 }: {
   displayName: string;
   email: string;
   initials: string;
   platformAdmin: boolean;
   membershipCount: number;
+  canChangePassword: boolean;
 }) {
   return (
     <>
@@ -206,9 +208,11 @@ function ProfilePage({
             <Typography variant="h5">{displayName}</Typography>
             <Typography color="text.secondary">{email}</Typography>
           </Box>
-          <Button variant="outlined" component={RouterLink} to="/password">
-            Change password
-          </Button>
+          {canChangePassword && (
+            <Button variant="outlined" component={RouterLink} to="/password">
+              Change password
+            </Button>
+          )}
         </Stack>
         <Divider />
         <Box sx={{ p: 3.5 }}>
@@ -293,6 +297,9 @@ export default function App() {
   if (!auth.ready) return <LoadingScreen />;
   if (auth.mustChange) return <ChangePasswordPage />;
   if (!profile) return <LoginPage />;
+
+  const handleSignOut = () =>
+    void (auth.impersonating ? auth.exitImpersonation() : auth.signOut());
 
   const initials = profile.display_name
     .split(" ")
@@ -506,14 +513,14 @@ export default function App() {
         <Button
           color="inherit"
           fullWidth
-          onClick={() => void auth.signOut()}
+          onClick={handleSignOut}
           sx={{
             mt: 1.25,
             border: "1px solid rgba(255,255,255,.1)",
             minHeight: 36,
           }}
         >
-          Sign out
+          {auth.impersonating ? "Exit impersonation" : "Sign out"}
         </Button>
       </Paper>
     </Stack>
@@ -556,6 +563,34 @@ export default function App() {
 
   return (
     <Box sx={{ minHeight: "100vh" }}>
+      {auth.impersonating && (
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1.5,
+            py: 1,
+            px: 2,
+            bgcolor: "warning.main",
+            color: "warning.contrastText",
+            flexWrap: "wrap",
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            Viewing as {auth.impersonationTarget?.displayName} (
+            {auth.impersonationTarget?.email})
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            color="inherit"
+            onClick={() => void auth.exitImpersonation()}
+          >
+            Exit
+          </Button>
+        </Stack>
+      )}
       {desktop ? (
         <Drawer
           variant="permanent"
@@ -816,10 +851,20 @@ export default function App() {
                       initials={initials}
                       platformAdmin={profile.platform_admin}
                       membershipCount={memberships.length}
+                      canChangePassword={!auth.impersonating}
                     />
                   }
                 />
-                <Route path="/password" element={<ChangePasswordPage />} />
+                <Route
+                  path="/password"
+                  element={
+                    auth.impersonating ? (
+                      <Navigate to="/profile" replace />
+                    ) : (
+                      <ChangePasswordPage />
+                    )
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             )}

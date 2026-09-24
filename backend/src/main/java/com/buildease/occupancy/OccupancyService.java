@@ -18,14 +18,14 @@ public class OccupancyService {
   }
 
   private boolean manage(Actor actor, UUID organization, UUID building) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     var member =
         db.find(
             "select owner from memberships where organization_id=? and account_id=? and status='ACTIVE'",
             organization,
             actor.id());
     if (!actor.admin() && member.isEmpty()) throw ApiException.forbidden();
-    db.context(actor.id(), organization);
+    db.context(actor.id(), organization, actor.impersonatedBy());
     db.one("select id from organizations where id=? and active for update", organization);
     db.one("select id from buildings where organization_id=? and id=?", organization, building);
     return actor.admin()

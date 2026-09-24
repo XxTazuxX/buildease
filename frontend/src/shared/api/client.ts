@@ -22,6 +22,50 @@ export const clearToken = () => {
 export const storeTokens = (tokens: Tokens) => {
   accessToken = tokens.accessToken;
 };
+
+// Impersonation keeps a fully separate, in-memory-only token pair. It never touches the
+// cookie-based refresh flow above, which is shared browser-wide via navigator.locks — reusing it
+// here would leak an admin's impersonated session into their other open tabs on silent refresh.
+let impersonationAccessToken: string | null = null;
+let impersonationRefreshToken: string | null = null;
+let impersonationRefreshing: Promise<void> | null = null;
+export const isImpersonating = () => impersonationAccessToken !== null;
+export const beginImpersonation = (tokens: {
+  accessToken: string;
+  refreshToken: string;
+}) => {
+  impersonationAccessToken = tokens.accessToken;
+  impersonationRefreshToken = tokens.refreshToken;
+};
+export const exitImpersonation = async () => {
+  try {
+    if (impersonationAccessToken) await api("/impersonation/exit", "POST");
+  } finally {
+    impersonationAccessToken = null;
+    impersonationRefreshToken = null;
+  }
+};
+async function refreshImpersonation(): Promise<void> {
+  if (!impersonationRefreshing) {
+    impersonationRefreshing = request<{
+      accessToken: string;
+      refreshToken: string;
+    }>(
+      "/impersonation/refresh",
+      "POST",
+      { refreshToken: impersonationRefreshToken },
+      false,
+    )
+      .then((tokens) => {
+        impersonationAccessToken = tokens.accessToken;
+        impersonationRefreshToken = tokens.refreshToken;
+      })
+      .finally(() => {
+        impersonationRefreshing = null;
+      });
+  }
+  return impersonationRefreshing;
+}
 async function csrf(): Promise<string> {
   // Authentication/password changes may clear Spring's CSRF cookie.
   const response = await fetch("/api/auth/csrf", {
@@ -44,7 +88,8 @@ async function request<T>(
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-XSRF-TOKEN"] = await csrf();
-  if (bearer && accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const token = impersonationAccessToken ?? accessToken;
+  if (bearer && token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`/api${path}`, {
     method,
     headers,
@@ -95,12 +140,18 @@ export async function api<T>(
     )
       throw error;
     try {
-      await refresh();
+      if (impersonationAccessToken) await refreshImpersonation();
+      else await refresh();
       return await request<T>(path, method, body, true);
     } catch (retryError) {
       if (retryError instanceof ApiError && retryError.status === 401) {
-        clearToken();
-        unauthorized();
+        if (impersonationAccessToken) {
+          impersonationAccessToken = null;
+          impersonationRefreshToken = null;
+        } else {
+          clearToken();
+          unauthorized();
+        }
       }
       throw retryError;
     }

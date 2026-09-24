@@ -107,7 +107,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(9);
+    assertThat(flyway.info().applied()).hasSize(10);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
@@ -802,5 +802,31 @@ class FoundationIT {
                   () -> command.run(new org.springframework.boot.DefaultApplicationArguments()))
               .isInstanceOf(IllegalStateException.class);
         });
+  }
+
+  @Test
+  void platformAuditIsCrossOrganizationAndPlatformAdminOnly() {
+    String ownerAEmail = "owner-a-" + UUID.randomUUID() + "@example.test";
+    String ownerBEmail = "owner-b-" + UUID.randomUUID() + "@example.test";
+    UUID orgA = organization(ownerAEmail);
+    UUID orgB = organization(ownerBEmail);
+    Actor ownerA = actor(ownerAEmail);
+
+    var rows = tenants.platformAudit(admin, 0, null, null);
+    assertThat(rows).anySatisfy(r -> assertThat(r).containsEntry("organization_id", orgA));
+    assertThat(rows).anySatisfy(r -> assertThat(r).containsEntry("organization_id", orgB));
+    assertThat(rows).anySatisfy(r -> assertThat(r).containsEntry("organization_id", null));
+
+    var scopedToA = tenants.platformAudit(admin, 0, orgA, null);
+    assertThat(scopedToA).isNotEmpty();
+    assertThat(scopedToA).allSatisfy(r -> assertThat(r).containsEntry("organization_id", orgA));
+
+    var scopedToOwnerA = tenants.platformAudit(admin, 0, null, ownerA.id());
+    assertThat(scopedToOwnerA).isNotEmpty();
+    assertThat(scopedToOwnerA)
+        .allSatisfy(r -> assertThat(r).containsEntry("actor_id", ownerA.id()));
+
+    assertThatThrownBy(() -> tenants.platformAudit(ownerA, 0, null, null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
 }

@@ -60,6 +60,61 @@ it("does not loop if retried request remains unauthorized", async () => {
   expect(fetch).toHaveBeenCalledTimes(4);
   expect(lost).toHaveBeenCalledOnce();
 });
+it("uses the impersonation token instead of the admin's once impersonation begins", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "csrf" })))
+    .mockResolvedValueOnce(new Response(JSON.stringify([{ id: "one" }])));
+  vi.stubGlobal("fetch", fetch);
+  const client = await import("./client");
+  client.storeTokens({ accessToken: "admin-token", mustChangePassword: false });
+  client.beginImpersonation({
+    accessToken: "impersonation-token",
+    refreshToken: "impersonation-refresh",
+  });
+  expect(client.isImpersonating()).toBe(true);
+  await client.api("/platform/organizations", "POST", {});
+  expect(fetch.mock.calls[1][1].headers.Authorization).toBe(
+    "Bearer impersonation-token",
+  );
+});
+it("a 401 while impersonating refreshes via /impersonation/refresh, not /auth/refresh", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "csrf" })))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accessToken: "rotated-access",
+          refreshToken: "rotated-refresh",
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(new Response(JSON.stringify([{ id: "one" }])));
+  vi.stubGlobal("fetch", fetch);
+  const client = await import("./client");
+  client.beginImpersonation({
+    accessToken: "expired",
+    refreshToken: "impersonation-refresh",
+  });
+  await client.api("/platform/audit");
+  expect(fetch.mock.calls[2][0]).toBe("/api/impersonation/refresh");
+  expect(fetch.mock.calls[3][1].headers.Authorization).toBe(
+    "Bearer rotated-access",
+  );
+});
+it("exitImpersonation clears impersonation state even when the network call fails", async () => {
+  const fetch = vi.fn().mockRejectedValueOnce(new Error("offline"));
+  vi.stubGlobal("fetch", fetch);
+  const client = await import("./client");
+  client.beginImpersonation({
+    accessToken: "token",
+    refreshToken: "refresh",
+  });
+  await expect(client.exitImpersonation()).rejects.toThrow();
+  expect(client.isImpersonating()).toBe(false);
+});
 it("renews CSRF after authentication clears the old cookie", async () => {
   const fetch = vi
     .fn()

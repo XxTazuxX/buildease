@@ -1,6 +1,7 @@
 package com.buildease.tenancy;
 
 import com.buildease.auth.Actor;
+import com.buildease.impersonation.ImpersonationService;
 import com.buildease.security.Role;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -11,9 +12,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api")
 public class TenantController {
   private final TenantService service;
+  private final ImpersonationService impersonation;
 
-  public TenantController(TenantService service) {
+  public TenantController(TenantService service, ImpersonationService impersonation) {
     this.service = service;
+    this.impersonation = impersonation;
   }
 
   public record Organization(
@@ -85,6 +88,20 @@ public class TenantController {
   @PostMapping("/platform/accounts/{id}/reset-password")
   void reset(@RequestAttribute Actor actor, @PathVariable UUID id, @Valid @RequestBody Reset b) {
     service.reset(actor, id, b.temporaryPassword());
+  }
+
+  @PostMapping("/platform/accounts/{id}/impersonate")
+  Object impersonate(@RequestAttribute Actor actor, @PathVariable UUID id) {
+    return impersonation.start(actor, id);
+  }
+
+  @GetMapping("/platform/audit")
+  Object platformAudit(
+      @RequestAttribute Actor actor,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(required = false) UUID organizationId,
+      @RequestParam(required = false) UUID actorId) {
+    return service.platformAudit(actor, page, organizationId, actorId);
   }
 
   @GetMapping("/organizations/{org}/access")

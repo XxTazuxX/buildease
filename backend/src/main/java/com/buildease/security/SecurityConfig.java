@@ -79,7 +79,8 @@ public class SecurityConfig {
                         "/api/auth/register",
                         "/api/auth/verify",
                         "/api/auth/forgot-password",
-                        "/api/auth/reset-password")
+                        "/api/auth/reset-password",
+                        "/api/impersonation/refresh")
                     .permitAll()
                     .requestMatchers("/api/**")
                     .authenticated()
@@ -107,7 +108,10 @@ public class SecurityConfig {
                     return;
                   }
                   req.setAttribute("actor", actor);
-                  if (actor.mustChangePassword()
+                  // The forced-password-change lockout is about the real credential holder's own
+                  // session; it must not block an admin viewing as someone else.
+                  if (actor.impersonatedBy() == null
+                      && actor.mustChangePassword()
                       && !Set.of("/api/auth/change-password", "/api/auth/logout", "/api/auth/csrf")
                           .contains(req.getRequestURI())) {
                     error(res, 403);

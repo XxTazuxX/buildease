@@ -24,18 +24,18 @@ public class TenantService {
     if (!a.admin()
         || db.find("select 1 from accounts where id=? and active and platform_admin", a.id())
             .isEmpty()) throw ApiException.forbidden();
-    db.context(a.id(), null);
+    db.context(a.id(), null, a.impersonatedBy());
   }
 
   private boolean enter(Actor a, UUID org) {
-    db.context(a.id(), null);
+    db.context(a.id(), null, a.impersonatedBy());
     var membership =
         db.find(
             "select * from memberships where organization_id=? and account_id=? and status='ACTIVE'",
             org,
             a.id());
     if (!a.admin() && membership.isEmpty()) throw ApiException.forbidden();
-    db.context(a.id(), org);
+    db.context(a.id(), org, a.impersonatedBy());
     var organization = db.one("select * from organizations where id=? for update", org);
     if (!(boolean) organization.get("active")) throw ApiException.forbidden();
     membership =
@@ -100,7 +100,7 @@ public class TenantService {
         db.find("select id from accounts where email=?", AuthService.email(email)).isPresent();
     UUID user = account(email, ownerName, temporaryPassword);
     db.update("insert into organizations(id,name) values (?,?)", org, name);
-    db.context(a.id(), org);
+    db.context(a.id(), org, a.impersonatedBy());
     member(a, org, user, true, existing);
     db.audit(a.id(), org, "ORGANIZATION_CREATED", org);
     return Map.of("id", org);
@@ -120,6 +120,8 @@ public class TenantService {
         offset(page));
   }
 
+  // Deliberately does not email the new account; the admin relays the temporary password out of
+  // band. Only self-registration/forgot-password (OnboardingService) send email.
   public Map<String, Object> createAccount(
       Actor a, String email, String name, String password, boolean admin) {
     platform(a);
@@ -158,6 +160,8 @@ public class TenantService {
     db.audit(a.id(), null, "ACCOUNT_STATUS", id);
   }
 
+  // Deliberately does not email the target account; the admin relays the temporary password
+  // out of band. Only self-registration/forgot-password (OnboardingService) send email.
   public void reset(Actor a, UUID id, String password) {
     platform(a);
     PasswordPolicy.validate(password);
@@ -449,12 +453,12 @@ public class TenantService {
   }
 
   public void accept(Actor a, UUID org) {
-    db.context(a.id(), null);
+    db.context(a.id(), null, a.impersonatedBy());
     db.one(
         "select * from memberships where account_id=? and organization_id=? and status='PENDING'",
         a.id(),
         org);
-    db.context(a.id(), org);
+    db.context(a.id(), org, a.impersonatedBy());
     db.one("select id from organizations where id=? and active for update", org);
     db.update(
         "update memberships set status='ACTIVE' where account_id=? and organization_id=? and status='PENDING'",
@@ -563,6 +567,20 @@ public class TenantService {
     return db.rows(
         "select actor_id,action,target_id,created_at from audit_events where organization_id=? order by created_at desc,id limit 50 offset ?",
         org,
+        offset(page));
+  }
+
+  public List<Map<String, Object>> platformAudit(
+      Actor a, int page, UUID organization, UUID actorFilter) {
+    platform(a);
+    return db.rows(
+        "select actor_id,action,target_id,organization_id,impersonated_by,created_at from audit_events "
+            + "where (?::uuid is null or organization_id=?) and (?::uuid is null or actor_id=?) "
+            + "order by created_at desc,id limit 50 offset ?",
+        organization,
+        organization,
+        actorFilter,
+        actorFilter,
         offset(page));
   }
 

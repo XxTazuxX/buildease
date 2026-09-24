@@ -22,7 +22,7 @@ public class NotificationService {
 
   public List<Map<String, Object>> inbox(Actor actor, boolean unreadOnly, int page) {
     if (page < 0 || page > 10000) throw new ApiException(400, "Invalid page");
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     return db.rows(
         "select id,organization_id,building_id,type,title,target_path,read_at,created_at from notifications where account_id=? and (?=false or read_at is null) order by created_at desc,id limit 50 offset ?",
         actor.id(),
@@ -31,7 +31,7 @@ public class NotificationService {
   }
 
   public void read(Actor actor, UUID notification) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     if (db.update(
             "update notifications set read_at=coalesce(read_at,now()) where id=? and account_id=?",
             notification,
@@ -46,7 +46,7 @@ public class NotificationService {
 
   public UUID subscribe(
       Actor actor, String endpoint, String key, String secret, Instant expiresAt) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     String hash = AuthService.hash(endpoint);
     var existing =
         db.find(
@@ -78,7 +78,7 @@ public class NotificationService {
   }
 
   public void unsubscribe(Actor actor, UUID subscription) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     db.update(
         "delete from push_subscriptions where id=? and account_id=?", subscription, actor.id());
   }

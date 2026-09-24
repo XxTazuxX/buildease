@@ -31,14 +31,23 @@ public class Store {
   }
 
   public void context(UUID actor, UUID org) {
+    context(actor, org, null);
+  }
+
+  public void context(UUID actor, UUID org, UUID impersonatedBy) {
     jdbc.queryForObject("select set_config('app.actor',?,true)", String.class, actor.toString());
     jdbc.queryForObject(
         "select set_config('app.org',?,true)", String.class, org == null ? "" : org.toString());
+    jdbc.queryForObject(
+        "select set_config('app.impersonated_by',?,true)",
+        String.class,
+        impersonatedBy == null ? "" : impersonatedBy.toString());
   }
 
   public void audit(UUID actor, UUID org, String action, UUID target) {
     update(
-        "insert into audit_events(id,actor_id,organization_id,action,target_id) values (?,?,?,?,?)",
+        "insert into audit_events(id,actor_id,organization_id,action,target_id,impersonated_by) "
+            + "values (?,?,?,?,?,nullif(current_setting('app.impersonated_by',true),'')::uuid)",
         UUID.randomUUID(),
         actor,
         org,

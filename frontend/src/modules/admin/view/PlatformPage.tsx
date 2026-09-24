@@ -21,6 +21,7 @@ import {
   useAction,
   useAdminCommands,
 } from "../viewmodel/useAdmin";
+import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 import type { Account, Organization } from "../model/admin";
 import { FieldsForm } from "@/shared/components/FieldsForm";
 import { Pager } from "@/shared/components/Pager";
@@ -30,22 +31,28 @@ import {
   StatusChip,
 } from "@/shared/components/Surface";
 import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
+import { SettingsPanel } from "./SettingsPanel";
+import { AuditLogPanel } from "./AuditLogPanel";
 
 type MoreTarget =
   | { kind: "organization"; item: Organization }
   | { kind: "account"; item: Account }
   | null;
 
+type Tab = "organizations" | "accounts" | "settings" | "audit";
+
 export function PlatformPage() {
-  const [tab, setTab] = useState<"organizations" | "accounts">("organizations");
+  const [tab, setTab] = useState<Tab>("organizations");
   const [page, setPage] = useState(0);
   const [reset, setReset] = useState<Account | null>(null);
   const [create, setCreate] = useState(false);
   const [systemAdmin, setSystemAdmin] = useState(false);
   const [more, setMore] = useState<MoreTarget>(null);
-  const query = usePlatform(tab, page);
+  const isListTab = tab === "organizations" || tab === "accounts";
+  const query = usePlatform(isListTab ? tab : "organizations", page, isListTab);
   const action = useAction();
   const commands = useAdminCommands();
+  const auth = useAuth();
   return (
     <>
       <PageHeader
@@ -53,236 +60,269 @@ export function PlatformPage() {
         title="Administration"
         description="Manage customer organizations, platform accounts, and access lifecycle from one place."
         action={
-          <Button variant="contained" onClick={() => setCreate(true)}>
-            <Box component="span" aria-hidden sx={{ mr: 0.75 }}>
-              +
-            </Box>
-            Create {tab === "organizations" ? "organization" : "account"}
-          </Button>
+          isListTab ? (
+            <Button variant="contained" onClick={() => setCreate(true)}>
+              <Box component="span" aria-hidden sx={{ mr: 0.75 }}>
+                +
+              </Box>
+              Create {tab === "organizations" ? "organization" : "account"}
+            </Button>
+          ) : undefined
         }
       />
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "repeat(2, minmax(0, 1fr))",
-            sm: "repeat(3, 1fr)",
-          },
-          gap: 2,
-          mb: 3,
-          "& > :nth-of-type(3)": { gridColumn: { xs: "1 / -1", sm: "auto" } },
-        }}
-      >
-        <MetricCard
-          label="Current view"
-          value={query.data?.length ?? "—"}
-          detail={`Visible ${tab} on this page`}
-        />
-        <MetricCard
-          label="Platform status"
-          value="Online"
-          detail="Authentication and database available"
-          tone="gold"
-        />
-        <MetricCard
-          label="Security"
-          value="Enforced"
-          detail="Sessions, roles, and audit trail"
-          tone="slate"
-        />
-      </Box>
+      {isListTab && (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "repeat(2, minmax(0, 1fr))",
+              sm: "repeat(3, 1fr)",
+            },
+            gap: 2,
+            mb: 3,
+            "& > :nth-of-type(3)": { gridColumn: { xs: "1 / -1", sm: "auto" } },
+          }}
+        >
+          <MetricCard
+            label="Current view"
+            value={query.data?.length ?? "—"}
+            detail={`Visible ${tab} on this page`}
+          />
+          <MetricCard
+            label="Platform status"
+            value="Online"
+            detail="Authentication and database available"
+            tone="gold"
+          />
+          <MetricCard
+            label="Security"
+            value="Enforced"
+            detail="Sessions, roles, and audit trail"
+            tone="slate"
+          />
+        </Box>
+      )}
       <Paper sx={{ px: 1.5, mb: 2 }}>
         <Tabs
           value={tab}
-          onChange={(_, value) => {
+          onChange={(_, value: Tab) => {
             setTab(value);
             setPage(0);
           }}
         >
           <Tab value="organizations" label="Organizations" />
           <Tab value="accounts" label="Accounts" />
+          <Tab value="settings" label="Settings" />
+          <Tab value="audit" label="Audit log" />
         </Tabs>
       </Paper>
-      {(query.error || action.error) && (
-        <Alert severity="error">{action.error || query.error?.message}</Alert>
-      )}
-      {query.isLoading && <Typography sx={{ p: 3 }}>Loading…</Typography>}
-      {query.data?.length === 0 && (
-        <Paper sx={{ p: 5, my: 3 }}>
-          <Typography>
-            No {tab} yet. Create your first one to get started.
-          </Typography>
-        </Paper>
-      )}
-      <Stack spacing={1.25} sx={{ my: 2 }}>
-        {tab === "organizations"
-          ? (query.data as Organization[] | undefined)?.map((o) => (
-              <Paper
-                key={o.id}
-                sx={{
-                  p: 2.5,
-                  transition: "border-color .2s, transform .2s",
-                  "&:hover": {
-                    borderColor: "#B8D6CE",
-                    transform: "translateY(-1px)",
-                  },
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  sx={{
-                    alignItems: "center",
-                    flexWrap: { xs: "wrap", md: "nowrap" },
-                  }}
-                >
-                  <Box
+      {tab === "settings" && <SettingsPanel />}
+      {tab === "audit" && <AuditLogPanel />}
+      {isListTab && (
+        <>
+          {(query.error || action.error) && (
+            <Alert severity="error">
+              {action.error || query.error?.message}
+            </Alert>
+          )}
+          {query.isLoading && <Typography sx={{ p: 3 }}>Loading…</Typography>}
+          {query.data?.length === 0 && (
+            <Paper sx={{ p: 5, my: 3 }}>
+              <Typography>
+                No {tab} yet. Create your first one to get started.
+              </Typography>
+            </Paper>
+          )}
+          <Stack spacing={1.25} sx={{ my: 2 }}>
+            {tab === "organizations"
+              ? (query.data as Organization[] | undefined)?.map((o) => (
+                  <Paper
+                    key={o.id}
                     sx={{
-                      width: 46,
-                      height: 46,
-                      borderRadius: 2.5,
-                      bgcolor: "primary.light",
-                      color: "primary.main",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 850,
+                      p: 2.5,
+                      transition: "border-color .2s, transform .2s",
+                      "&:hover": {
+                        borderColor: "#B8D6CE",
+                        transform: "translateY(-1px)",
+                      },
                     }}
                   >
-                    {o.name.slice(0, 2).toUpperCase()}
-                  </Box>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="h6">{o.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Organization ID · {o.id.slice(0, 8)}
-                    </Typography>
-                  </Box>
-                  <StatusChip active={o.active} />
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{ display: { xs: "none", md: "flex" } }}
-                  >
-                    <Button
-                      variant="outlined"
-                      component={RouterLink}
-                      to={`/organizations/${o.id}`}
-                      disabled={!o.active}
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      sx={{
+                        alignItems: "center",
+                        flexWrap: { xs: "wrap", md: "nowrap" },
+                      }}
                     >
-                      Open workspace
-                    </Button>
-                    <Button
-                      color={o.active ? "error" : "primary"}
-                      disabled={action.busy}
-                      onClick={() =>
-                        void action.run(() =>
-                          commands.organizationStatus(o.id, !o.active),
-                        )
-                      }
-                    >
-                      {o.active ? "Deactivate" : "Activate"}
-                    </Button>
-                  </Stack>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    sx={{ display: { xs: "flex", md: "none" } }}
-                    onClick={() => setMore({ kind: "organization", item: o })}
-                  >
-                    More actions
-                  </Button>
-                </Stack>
-              </Paper>
-            ))
-          : (query.data as Account[] | undefined)?.map((a) => (
-              <Paper
-                key={a.id}
-                sx={{
-                  p: 2.5,
-                  transition: "border-color .2s, transform .2s",
-                  "&:hover": {
-                    borderColor: "#B8D6CE",
-                    transform: "translateY(-1px)",
-                  },
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  sx={{
-                    alignItems: "center",
-                    flexWrap: { xs: "wrap", md: "nowrap" },
-                  }}
-                >
-                  <Box
+                      <Box
+                        sx={{
+                          width: 46,
+                          height: 46,
+                          borderRadius: 2.5,
+                          bgcolor: "primary.light",
+                          color: "primary.main",
+                          display: "grid",
+                          placeItems: "center",
+                          fontWeight: 850,
+                        }}
+                      >
+                        {o.name.slice(0, 2).toUpperCase()}
+                      </Box>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6">{o.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Organization ID · {o.id.slice(0, 8)}
+                        </Typography>
+                      </Box>
+                      <StatusChip active={o.active} />
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ display: { xs: "none", md: "flex" } }}
+                      >
+                        <Button
+                          variant="outlined"
+                          component={RouterLink}
+                          to={`/organizations/${o.id}`}
+                          disabled={!o.active}
+                        >
+                          Open workspace
+                        </Button>
+                        <Button
+                          color={o.active ? "error" : "primary"}
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              commands.organizationStatus(o.id, !o.active),
+                            )
+                          }
+                        >
+                          {o.active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </Stack>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        sx={{ display: { xs: "flex", md: "none" } }}
+                        onClick={() =>
+                          setMore({ kind: "organization", item: o })
+                        }
+                      >
+                        More actions
+                      </Button>
+                    </Stack>
+                  </Paper>
+                ))
+              : (query.data as Account[] | undefined)?.map((a) => (
+                  <Paper
+                    key={a.id}
                     sx={{
-                      width: 46,
-                      height: 46,
-                      flexShrink: 0,
-                      borderRadius: "50%",
-                      bgcolor: a.platform_admin
-                        ? "secondary.light"
-                        : "primary.light",
-                      color: a.platform_admin
-                        ? "secondary.dark"
-                        : "primary.main",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 850,
+                      p: 2.5,
+                      transition: "border-color .2s, transform .2s",
+                      "&:hover": {
+                        borderColor: "#B8D6CE",
+                        transform: "translateY(-1px)",
+                      },
                     }}
                   >
-                    {a.display_name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </Box>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="h6">{a.display_name}</Typography>
-                    <Typography color="text.secondary">{a.email}</Typography>
-                  </Box>
-                  {a.platform_admin ? (
-                    <Chip
-                      label="System Administrator"
-                      color="secondary"
-                      variant="outlined"
-                    />
-                  ) : (
-                    <StatusChip active={a.active} />
-                  )}
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{ display: { xs: "none", md: "flex" } }}
-                  >
-                    <Button variant="outlined" onClick={() => setReset(a)}>
-                      Reset password
-                    </Button>
-                    <Button
-                      color={a.active ? "error" : "primary"}
-                      disabled={action.busy}
-                      onClick={() =>
-                        void action.run(() =>
-                          commands.accountStatus(a.id, !a.active),
-                        )
-                      }
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      sx={{
+                        alignItems: "center",
+                        flexWrap: { xs: "wrap", md: "nowrap" },
+                      }}
                     >
-                      {a.active ? "Deactivate" : "Activate"}
-                    </Button>
-                  </Stack>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    sx={{ display: { xs: "flex", md: "none" } }}
-                    onClick={() => setMore({ kind: "account", item: a })}
-                  >
-                    More actions
-                  </Button>
-                </Stack>
-              </Paper>
-            ))}
-      </Stack>
-      <Pager page={page} count={query.data?.length || 0} onChange={setPage} />
+                      <Box
+                        sx={{
+                          width: 46,
+                          height: 46,
+                          flexShrink: 0,
+                          borderRadius: "50%",
+                          bgcolor: a.platform_admin
+                            ? "secondary.light"
+                            : "primary.light",
+                          color: a.platform_admin
+                            ? "secondary.dark"
+                            : "primary.main",
+                          display: "grid",
+                          placeItems: "center",
+                          fontWeight: 850,
+                        }}
+                      >
+                        {a.display_name
+                          .split(" ")
+                          .map((part) => part[0])
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </Box>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6">{a.display_name}</Typography>
+                        <Typography color="text.secondary">
+                          {a.email}
+                        </Typography>
+                      </Box>
+                      {a.platform_admin ? (
+                        <Chip
+                          label="System Administrator"
+                          color="secondary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <StatusChip active={a.active} />
+                      )}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ display: { xs: "none", md: "flex" } }}
+                      >
+                        <Button variant="outlined" onClick={() => setReset(a)}>
+                          Reset password
+                        </Button>
+                        {a.id !== auth.profile?.id && (
+                          <Button
+                            variant="outlined"
+                            disabled={action.busy}
+                            onClick={() =>
+                              void action.run(() => commands.impersonate(a.id))
+                            }
+                          >
+                            Login as
+                          </Button>
+                        )}
+                        <Button
+                          color={a.active ? "error" : "primary"}
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              commands.accountStatus(a.id, !a.active),
+                            )
+                          }
+                        >
+                          {a.active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </Stack>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        sx={{ display: { xs: "flex", md: "none" } }}
+                        onClick={() => setMore({ kind: "account", item: a })}
+                      >
+                        More actions
+                      </Button>
+                    </Stack>
+                  </Paper>
+                ))}
+          </Stack>
+          <Pager
+            page={page}
+            count={query.data?.length || 0}
+            onChange={setPage}
+          />
+        </>
+      )}
       <ActionSheet
         open={!!more}
         onClose={() => setMore(null)}
@@ -331,6 +371,19 @@ export function PlatformPage() {
             >
               Reset password
             </Button>
+            {more.item.id !== auth.profile?.id && (
+              <Button
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await commands.impersonate(more.item.id);
+                    setMore(null);
+                  })
+                }
+              >
+                Login as
+              </Button>
+            )}
             <Button
               color={more.item.active ? "error" : "primary"}
               disabled={action.busy}

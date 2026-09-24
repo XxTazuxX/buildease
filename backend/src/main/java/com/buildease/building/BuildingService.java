@@ -19,7 +19,7 @@ public class BuildingService {
   }
 
   private boolean enter(Actor actor, UUID organization, UUID building) {
-    db.context(actor.id(), null);
+    db.context(actor.id(), null, actor.impersonatedBy());
     if (db.find("select 1 from accounts where id=? and active", actor.id()).isEmpty())
       throw ApiException.forbidden();
     var membership =
@@ -28,7 +28,7 @@ public class BuildingService {
             organization,
             actor.id());
     if (!actor.admin() && membership.isEmpty()) throw ApiException.forbidden();
-    db.context(actor.id(), organization);
+    db.context(actor.id(), organization, actor.impersonatedBy());
     db.one("select id from organizations where id=? and active for update", organization);
     db.one("select id from buildings where organization_id=? and id=?", organization, building);
     boolean owner = actor.admin() || membership.map(m -> (boolean) m.get("owner")).orElse(false);

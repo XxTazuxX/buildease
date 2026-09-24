@@ -12,6 +12,8 @@ vi.mock("@/shared/api/client", () => ({
   logout: vi.fn(),
   clearToken: vi.fn(),
   setUnauthorized: vi.fn(),
+  beginImpersonation: vi.fn(),
+  exitImpersonation: vi.fn(),
 }));
 vi.mock("../model/auth", () => ({
   getProfile: vi.fn(),
@@ -68,6 +70,70 @@ it("restricts temporary credentials and clears cached data after password replac
   expect(model.changePassword).toHaveBeenCalledWith("temporary", "permanent");
   expect(result.current.mustChange).toBe(false);
   expect(result.current.profile).toBeNull();
+});
+it("startImpersonation stashes the admin profile and swaps to the target's", async () => {
+  const admin = { ...profile, platform_admin: true };
+  const target = {
+    ...profile,
+    id: "two",
+    display_name: "Target",
+    email: "target@example.test",
+  };
+  vi.mocked(client.refresh).mockResolvedValue({
+    accessToken: "memory",
+    mustChangePassword: false,
+  });
+  vi.mocked(model.getProfile).mockResolvedValueOnce(admin);
+  const { result } = renderHook(() => useAuth(), { wrapper });
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  expect(result.current.profile).toEqual(admin);
+
+  vi.mocked(model.getProfile).mockResolvedValueOnce(target);
+  await act(async () =>
+    result.current.startImpersonation({
+      accessToken: "imp-access",
+      refreshToken: "imp-refresh",
+      targetEmail: target.email,
+      targetDisplayName: target.display_name,
+    }),
+  );
+  expect(client.beginImpersonation).toHaveBeenCalledWith({
+    accessToken: "imp-access",
+    refreshToken: "imp-refresh",
+  });
+  expect(result.current.profile).toEqual(target);
+  expect(result.current.impersonating).toBe(true);
+  expect(result.current.impersonationTarget).toEqual({
+    email: target.email,
+    displayName: target.display_name,
+  });
+});
+it("exitImpersonation restores the stashed admin profile without another /auth/me call", async () => {
+  const admin = { ...profile, platform_admin: true };
+  const target = { ...profile, id: "two", display_name: "Target" };
+  vi.mocked(client.refresh).mockResolvedValue({
+    accessToken: "memory",
+    mustChangePassword: false,
+  });
+  vi.mocked(model.getProfile).mockResolvedValueOnce(admin);
+  const { result } = renderHook(() => useAuth(), { wrapper });
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  vi.mocked(model.getProfile).mockResolvedValueOnce(target);
+  await act(async () =>
+    result.current.startImpersonation({
+      accessToken: "imp-access",
+      refreshToken: "imp-refresh",
+      targetEmail: target.email,
+      targetDisplayName: target.display_name,
+    }),
+  );
+  const callsAfterStart = vi.mocked(model.getProfile).mock.calls.length;
+
+  await act(async () => result.current.exitImpersonation());
+  expect(client.exitImpersonation).toHaveBeenCalled();
+  expect(result.current.profile).toEqual(admin);
+  expect(result.current.impersonating).toBe(false);
+  expect(model.getProfile).toHaveBeenCalledTimes(callsAfterStart);
 });
 it("loads profile on login and removes all query data on logout", async () => {
   const { result } = renderHook(() => useAuth(), { wrapper });

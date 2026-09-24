@@ -6,6 +6,7 @@ import {
   type Role,
   type Organization,
   type Account,
+  type EmailTemplateKey,
 } from "../model/admin";
 export function useAction() {
   const cache = useQueryClient();
@@ -27,13 +28,18 @@ export function useAction() {
   };
   return { run, error, busy };
 }
-export function usePlatform(kind: "organizations" | "accounts", page: number) {
+export function usePlatform(
+  kind: "organizations" | "accounts",
+  page: number,
+  enabled = true,
+) {
   return useQuery<Organization[] | Account[]>({
     queryKey: ["platform", kind, page],
     queryFn: () =>
       kind === "organizations"
         ? adminApi.organizations(page)
         : adminApi.accounts(page),
+    enabled,
   });
 }
 export function useOrgAccess(org: string) {
@@ -80,6 +86,44 @@ export function useWorkspace(org: string, building: string, page: number) {
   });
   return { access, buildings, members, canManage, canManageFinance };
 }
+export function useMailSettings() {
+  const query = useQuery({
+    queryKey: ["platform", "mail-settings"],
+    queryFn: () => adminApi.mailSettings(),
+  });
+  const action = useAction();
+  const update = (body: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    from: string;
+    starttls: boolean;
+  }) => action.run(() => adminApi.updateMailSettings(body));
+  const sendTest = (recipient: string) =>
+    action.run(() => adminApi.testMail(recipient));
+  return { query, action, update, sendTest };
+}
+export function useEmailTemplates() {
+  const query = useQuery({
+    queryKey: ["platform", "email-templates"],
+    queryFn: () => adminApi.emailTemplates(),
+  });
+  const action = useAction();
+  const update = (key: EmailTemplateKey, subject: string, body: string) =>
+    action.run(() => adminApi.updateEmailTemplate(key, subject, body));
+  return { query, action, update };
+}
+export function usePlatformAudit(
+  page: number,
+  organizationId?: string,
+  actorId?: string,
+) {
+  return useQuery({
+    queryKey: ["platform", "audit", page, organizationId, actorId],
+    queryFn: () => adminApi.platformAudit(page, organizationId, actorId),
+  });
+}
 export function useRoleEditor(org: string, building: string, user: string) {
   const query = useQuery({
     queryKey: [org, "roles", building, user],
@@ -117,5 +161,9 @@ export function useAdminCommands() {
     membership: adminApi.membership,
     updateMember: adminApi.updateMember,
     accept: adminApi.accept,
+    impersonate: async (id: string) => {
+      const tokens = await adminApi.impersonate(id);
+      await auth.startImpersonation(tokens);
+    },
   };
 }
