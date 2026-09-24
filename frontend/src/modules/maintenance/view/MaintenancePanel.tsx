@@ -20,10 +20,12 @@ export function MaintenancePanel({
   org,
   building,
   canManage,
+  canReport = true,
 }: {
   org: string;
   building: string;
   canManage: boolean;
+  canReport?: boolean;
 }) {
   const vm = useMaintenance(org, building);
   const [createOpen, setCreateOpen] = useState(false);
@@ -68,9 +70,11 @@ export function MaintenancePanel({
               Categories
             </Button>
           )}
-          <Button variant="contained" onClick={() => setCreateOpen(true)}>
-            Report issue
-          </Button>
+          {canReport && (
+            <Button variant="contained" onClick={() => setCreateOpen(true)}>
+              Report issue
+            </Button>
+          )}
         </Stack>
       </Stack>
       {error && (
@@ -193,11 +197,13 @@ export function MaintenancePanel({
           );
         })}
       </Stack>
-      <ReportIssueDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        vm={vm}
-      />
+      {canReport && (
+        <ReportIssueDialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          vm={vm}
+        />
+      )}
       <AdaptiveDialog
         open={categoryOpen}
         onClose={() => {

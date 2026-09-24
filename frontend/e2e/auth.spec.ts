@@ -37,12 +37,12 @@ test("administrator signs in, creates an organization and manages its building",
     .getByLabel("Temporary password (new accounts only)")
     .fill(temporary);
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  const row = page
-    .locator(".MuiPaper-root")
-    .filter({
-      has: page.getByRole("heading", { name: "East Properties", exact: true }),
-    });
+  const row = page.locator(".MuiPaper-root").filter({
+    has: page.getByRole("heading", { name: "East Properties", exact: true }),
+  });
   await row.getByRole("link", { name: "Open workspace" }).click();
+  await expect(page.getByText("Organization overview")).toBeVisible();
+  await page.getByRole("link", { name: "Properties", exact: true }).click();
   await page.getByRole("button", { name: "Add building", exact: true }).click();
   await page.getByLabel("Building name").fill("East House");
   await page.getByLabel("Building code").fill("EAST");
@@ -82,9 +82,27 @@ test("administrator signs in, creates an organization and manages its building",
     await page.evaluate(() => localStorage.length + sessionStorage.length),
   ).toBe(0);
   await expect(
-    page.getByRole("heading", { name: "Buildings & people" }),
+    page.getByRole("heading", { name: "Buildings and spaces" }),
   ).toBeVisible();
   await expect(page.getByRole("alert")).not.toBeVisible();
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(page.getByText("Organization overview")).toBeVisible();
+  await page.getByRole("link", { name: "Properties", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Buildings and spaces" }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "People & occupancy", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Members and occupancy" }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Finance & maintenance", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Finance and maintenance" }),
+  ).toBeVisible();
   await page.screenshot({ path: "../.local/workspace.png", fullPage: true });
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(
@@ -102,16 +120,19 @@ test("owner accepts an invitation and switches isolated organizations", async ({
   await expect(
     page.getByText("You’re invited to South Properties"),
   ).not.toBeVisible();
-  await page.getByRole("button", { name: "Organization", exact: true }).click();
-  await page.getByRole("button", { name: "South Properties", exact: true }).click();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("combobox", { name: "Organization" }).click();
+  await page.getByRole("option", { name: "South Properties" }).click();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page
+    .getByRole("link", { name: "People & occupancy", exact: true })
+    .click();
   const currentMember = page.locator(".MuiPaper-root").filter({
     has: page.getByText("owner@example.test", { exact: true }),
   });
   await expect(currentMember.getByText("You", { exact: true })).toBeVisible();
   await currentMember.getByRole("button", { name: "More actions" }).click();
-  await expect(
-    page.getByRole("button", { name: "Edit member" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit member" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Remove membership" }),
   ).not.toBeVisible();
@@ -127,11 +148,29 @@ test("owner accepts an invitation and switches isolated organizations", async ({
     page.getByRole("option", { name: "North House · NORTH" }),
   ).not.toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-  await page.screenshot({ path: "../.local/mobile-workspace.png", fullPage: true });
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }),
+  ).not.toBeVisible();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "../.local/mobile-workspace.png",
+    fullPage: true,
+  });
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
 });
 test("property manager delegates a tenant role without owner privileges", async ({
   page,
@@ -146,6 +185,10 @@ test("property manager delegates a tenant role without owner privileges", async 
   ).not.toBeVisible();
   await page.getByRole("combobox", { name: "Building", exact: true }).click();
   await page.getByRole("option", { name: "North House · NORTH" }).click();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page
+    .getByRole("link", { name: "People & occupancy", exact: true })
+    .click();
   await page.getByRole("button", { name: "Add member", exact: true }).click();
   await expect(page.getByLabel("Organization owner")).not.toBeVisible();
   await expect(page.getByLabel("PROPERTY MANAGER")).not.toBeVisible();
@@ -169,26 +212,57 @@ test("property manager delegates a tenant role without owner privileges", async 
   expect((await page.getByRole("dialog").boundingBox())?.width).toBe(360);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-  await page.screenshot({ path: "../.local/mobile-member.png", fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "../.local/mobile-member.png",
+    fullPage: true,
+  });
 });
 
-test("tablet navigation and administration use touch-friendly action sheets", async ({ page }) => {
+test("tenant users continue to receive the tenant portal", async ({ page }) => {
+  await firstLogin(page, "tenant@example.test");
+  await expect(page.getByText("My home", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Your lease, unit, and requests" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Overview", exact: true }),
+  ).not.toBeVisible();
+});
+
+test("tablet navigation and administration use touch-friendly action sheets", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto("/");
   await page.getByLabel("Email", { exact: true }).fill("admin@example.test");
   await page.getByLabel("Password", { exact: true }).fill(permanent);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Administration" }).click();
-  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
   const organization = page.locator(".MuiPaper-root").filter({
     has: page.getByRole("heading", { name: "East Properties", exact: true }),
   });
   await organization.getByRole("button", { name: "More actions" }).click();
-  await expect(page.getByRole("link", { name: "Open workspace" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open workspace" }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("link", { name: "Open workspace" })).not.toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open workspace" }),
+  ).not.toBeVisible();
   await expect(page.locator(".MuiDrawer-root")).not.toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
   await page.screenshot({ path: "../.local/tablet-admin.png", fullPage: true });
 });

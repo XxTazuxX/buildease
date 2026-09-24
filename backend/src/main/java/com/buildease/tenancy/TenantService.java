@@ -3,6 +3,7 @@ package com.buildease.tenancy;
 import com.buildease.auth.*;
 import com.buildease.common.*;
 import com.buildease.security.*;
+import java.math.BigDecimal;
 import java.util.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -177,6 +178,201 @@ public class TenantService {
             org,
             a.id());
     return Map.of("owner", owner, "roles", roles);
+  }
+
+  public Map<String, Object> dashboard(Actor a, UUID org) {
+    boolean owner = enter(a, org);
+    Set<String> actorRoles = new HashSet<>();
+    db.rows(
+            "select distinct role from building_roles where organization_id=? and account_id=?",
+            org,
+            a.id())
+        .forEach(row -> actorRoles.add((String) row.get("role")));
+
+    String visibleBuildings =
+        owner
+            ? "true"
+            : "exists(select 1 from building_roles own where own.organization_id=b.organization_id and own.building_id=b.id and own.account_id=?)";
+    Object[] visibleArgs = owner ? new Object[] {org} : new Object[] {org, a.id()};
+    Number buildingCount =
+        number(
+            "select count(*) value from buildings b where b.organization_id=? and "
+                + visibleBuildings,
+            visibleArgs);
+
+    String visibleSpaces =
+        owner
+            ? "true"
+            : "exists(select 1 from building_roles own where own.organization_id=s.organization_id and own.building_id=s.building_id and own.account_id=?)";
+    Object[] spaceArgs = owner ? new Object[] {org} : new Object[] {org, a.id()};
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("building_count", buildingCount);
+    properties.put(
+        "space_count",
+        number(
+            "select count(*) value from spaces s where s.organization_id=? and " + visibleSpaces,
+            spaceArgs));
+    properties.put(
+        "occupied_space_count",
+        number(
+            "select count(*) value from spaces s where s.organization_id=? and s.status='OCCUPIED' and "
+                + visibleSpaces,
+            spaceArgs));
+    properties.put(
+        "vacant_space_count",
+        number(
+            "select count(*) value from spaces s where s.organization_id=? and s.status='VACANT' and "
+                + visibleSpaces,
+            spaceArgs));
+
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("properties", properties);
+    result.put(
+        "people",
+        owner || actorRoles.contains("PROPERTY_MANAGER") ? peopleDashboard(a, org, owner) : null);
+    result.put(
+        "finance",
+        owner || actorRoles.contains("PROPERTY_MANAGER") || actorRoles.contains("ACCOUNTANT")
+            ? financeDashboard(a, org, owner)
+            : null);
+    result.put(
+        "maintenance",
+        owner
+                || actorRoles.contains("PROPERTY_MANAGER")
+                || actorRoles.contains("MAINTENANCE_STAFF")
+                || actorRoles.contains("SECURITY_OPERATIONS_STAFF")
+                || actorRoles.contains("VENDOR")
+            ? maintenanceDashboard(a, org, owner)
+            : null);
+    return result;
+  }
+
+  private Map<String, Object> peopleDashboard(Actor actor, UUID org, boolean owner) {
+    String managedBuildings =
+        "select building_id from building_roles where organization_id=? and account_id=? and role='PROPERTY_MANAGER'";
+    Map<String, Object> people = new LinkedHashMap<>();
+    people.put(
+        "active_member_count",
+        owner
+            ? number(
+                "select count(*) value from memberships where organization_id=? and status='ACTIVE'",
+                org)
+            : number(
+                "select count(distinct m.account_id) value from memberships m join building_roles r on r.organization_id=m.organization_id and r.account_id=m.account_id where m.organization_id=? and m.status='ACTIVE' and r.building_id in ("
+                    + managedBuildings
+                    + ")",
+                org,
+                org,
+                actor.id()));
+    people.put(
+        "active_resident_count",
+        owner
+            ? number("select count(*) value from residents where organization_id=? and active", org)
+            : number(
+                "select count(*) value from residents where organization_id=? and active and building_id in ("
+                    + managedBuildings
+                    + ")",
+                org,
+                org,
+                actor.id()));
+    people.put(
+        "active_assignment_count",
+        owner
+            ? number(
+                "select count(*) value from space_assignments where organization_id=? and status='ACTIVE'",
+                org)
+            : number(
+                "select count(*) value from space_assignments where organization_id=? and status='ACTIVE' and building_id in ("
+                    + managedBuildings
+                    + ")",
+                org,
+                org,
+                actor.id()));
+    return people;
+  }
+
+  private Map<String, Object> financeDashboard(Actor actor, UUID org, boolean owner) {
+    String financeBuildings =
+        "select building_id from building_roles where organization_id=? and account_id=? and role in ('PROPERTY_MANAGER','ACCOUNTANT')";
+    Map<String, Object> finance = new LinkedHashMap<>();
+    finance.put(
+        "active_lease_count",
+        owner
+            ? number(
+                "select count(*) value from leases where organization_id=? and status='ACTIVE'",
+                org)
+            : number(
+                "select count(*) value from leases where organization_id=? and status='ACTIVE' and building_id in ("
+                    + financeBuildings
+                    + ")",
+                org,
+                org,
+                actor.id()));
+
+    Map<String, BigDecimal> balances = new TreeMap<>();
+    String chargeSql =
+        "select currency,sum(amount) amount from charges where organization_id=?"
+            + (owner ? "" : " and building_id in (" + financeBuildings + ")")
+            + " group by currency";
+    String paymentSql =
+        "select currency,sum(amount) amount from payments where organization_id=?"
+            + (owner ? "" : " and building_id in (" + financeBuildings + ")")
+            + " group by currency";
+    Object[] financeArgs = owner ? new Object[] {org} : new Object[] {org, org, actor.id()};
+    db.rows(chargeSql, financeArgs)
+        .forEach(
+            row ->
+                balances.merge(
+                    (String) row.get("currency"), (BigDecimal) row.get("amount"), BigDecimal::add));
+    db.rows(paymentSql, financeArgs)
+        .forEach(
+            row ->
+                balances.merge(
+                    (String) row.get("currency"),
+                    ((BigDecimal) row.get("amount")).negate(),
+                    BigDecimal::add));
+    finance.put(
+        "balance_by_currency",
+        balances.entrySet().stream()
+            .map(
+                entry ->
+                    Map.<String, Object>of(
+                        "currency", entry.getKey(), "amount", entry.getValue().toPlainString()))
+            .toList());
+    return finance;
+  }
+
+  private Map<String, Object> maintenanceDashboard(Actor actor, UUID org, boolean owner) {
+    String scope;
+    Object[] args;
+    if (owner) {
+      scope = "true";
+      args = new Object[] {org};
+    } else {
+      scope =
+          "(r.building_id in (select building_id from building_roles where organization_id=? and account_id=? and role='PROPERTY_MANAGER')"
+              + " or exists(select 1 from work_orders w where w.request_id=r.id and w.assigned_account_id=?)"
+              + " or exists(select 1 from work_orders w join vendor_accounts va on va.organization_id=w.organization_id and va.building_id=w.building_id and va.vendor_id=w.vendor_id where w.request_id=r.id and va.account_id=?))";
+      args = new Object[] {org, org, actor.id(), actor.id(), actor.id()};
+    }
+    Map<String, Object> maintenance = new LinkedHashMap<>();
+    maintenance.put(
+        "open_request_count",
+        number(
+            "select count(*) value from maintenance_requests r where r.organization_id=? and r.status not in ('CLOSED','CANCELLED') and "
+                + scope,
+            args));
+    maintenance.put(
+        "overdue_request_count",
+        number(
+            "select count(*) value from maintenance_requests r where r.organization_id=? and r.status not in ('CLOSED','CANCELLED') and r.resolution_due_at<now() and "
+                + scope,
+            args));
+    return maintenance;
+  }
+
+  private Number number(String sql, Object... args) {
+    return (Number) db.one(sql, args).get("value");
   }
 
   public List<Map<String, Object>> buildings(Actor a, UUID org, int page) {

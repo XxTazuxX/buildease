@@ -92,6 +92,11 @@ public class TenantController {
     return service.overview(actor, org);
   }
 
+  @GetMapping("/organizations/{org}/dashboard")
+  Object dashboard(@RequestAttribute Actor actor, @PathVariable UUID org) {
+    return service.dashboard(actor, org);
+  }
+
   @GetMapping("/organizations/{org}/buildings")
   Object buildings(
       @RequestAttribute Actor actor,

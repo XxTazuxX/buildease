@@ -74,6 +74,15 @@ public class E2eServer {
         false,
         building,
         Set.of(Role.PROPERTY_MANAGER));
+    tenants.invite(
+        actor,
+        org,
+        "tenant@example.test",
+        "Tenant User",
+        password,
+        false,
+        building,
+        Set.of(Role.TENANT));
     UUID other =
         (UUID)
             tenants

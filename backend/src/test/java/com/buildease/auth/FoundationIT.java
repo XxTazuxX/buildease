@@ -7,8 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.buildease.building.*;
 import com.buildease.common.*;
+import com.buildease.leasing.*;
+import com.buildease.maintenance.*;
+import com.buildease.occupancy.*;
 import com.buildease.security.*;
 import com.buildease.tenancy.*;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.flywaydb.core.Flyway;
@@ -64,6 +68,9 @@ class FoundationIT {
   @Autowired AuthService auth;
   @Autowired TenantService tenants;
   @Autowired BuildingService buildingConfigurations;
+  @Autowired OccupancyService occupancy;
+  @Autowired LeaseService leases;
+  @Autowired MaintenanceService maintenance;
   @Autowired PasswordEncoder passwords;
   @Autowired TransactionTemplate tx;
   @Autowired JwtDecoder decoder;
@@ -287,6 +294,226 @@ class FoundationIT {
     Actor owner = actor(e);
     tenants.organizationActive(admin, org, false);
     assertThatThrownBy(() -> tenants.overview(owner, org)).isInstanceOf(ApiException.class);
+  }
+
+  @Test
+  void dashboardAggregatesOperationsAndHidesUnauthorizedSections() {
+    String ownerEmail = "dashboard-owner-" + UUID.randomUUID() + "@example.test";
+    UUID org = organization(ownerEmail);
+    Actor owner = actor(ownerEmail);
+    UUID building = (UUID) tenants.createBuilding(owner, org, "Dashboard", "DASH").get("id");
+    tenants.createBuilding(owner, org, "Dashboard annex", "DASH2");
+    UUID space =
+        buildingConfigurations.createSpace(
+            owner, org, building, null, null, "Flat 1", "F1", SpaceType.FLAT, true, null, 4, null);
+    String residentEmail = "dashboard-resident-" + UUID.randomUUID() + "@example.test";
+    UUID residentAccount =
+        (UUID)
+            tenants
+                .invite(
+                    owner,
+                    org,
+                    residentEmail,
+                    "Resident",
+                    password,
+                    false,
+                    building,
+                    Set.of(Role.TENANT))
+                .get("id");
+    UUID resident =
+        occupancy.createResident(owner, org, building, residentAccount, "Resident", null);
+    UUID lease =
+        leases.createDraft(
+            owner,
+            org,
+            building,
+            resident,
+            space,
+            LocalDate.now(),
+            null,
+            new BigDecimal("1200.00"),
+            LocalDate.now(),
+            null,
+            null);
+    leases.activate(owner, org, building, lease);
+    db.update(
+        "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'USD',current_date)",
+        UUID.randomUUID(),
+        org,
+        building,
+        lease,
+        new BigDecimal("1200.00"));
+    leases.recordPayment(
+        owner,
+        org,
+        building,
+        lease,
+        new BigDecimal("450.00"),
+        PaymentMethod.BANK_TRANSFER,
+        null,
+        LocalDate.now(),
+        null);
+    db.update(
+        "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'EUR',current_date)",
+        UUID.randomUUID(),
+        org,
+        building,
+        lease,
+        new BigDecimal("19.95"));
+    UUID category = maintenance.createCategory(owner, org, building, "Repairs", 1, 2);
+    UUID request =
+        maintenance.submit(
+            owner, org, building, space, category, "Leak", "Pipe is leaking", Impact.HIGH, false);
+    db.update(
+        "update maintenance_requests set resolution_due_at=now()-interval '1 hour' where id=?",
+        request);
+    UUID closedRequest =
+        maintenance.submit(
+            owner, org, building, space, category, "Closed", "Resolved", Impact.LOW, false);
+    UUID cancelledRequest =
+        maintenance.submit(
+            owner, org, building, space, category, "Cancelled", "Duplicate", Impact.LOW, false);
+    db.update(
+        "update maintenance_requests set status='CLOSED',resolution_due_at=now()-interval '1 hour' where id=?",
+        closedRequest);
+    db.update(
+        "update maintenance_requests set status='CANCELLED',resolution_due_at=now()-interval '1 hour' where id=?",
+        cancelledRequest);
+
+    var dashboard = tenants.dashboard(owner, org);
+    @SuppressWarnings("unchecked")
+    var properties = (Map<String, Object>) dashboard.get("properties");
+    @SuppressWarnings("unchecked")
+    var people = (Map<String, Object>) dashboard.get("people");
+    @SuppressWarnings("unchecked")
+    var maintenanceSummary = (Map<String, Object>) dashboard.get("maintenance");
+    assertThat(properties)
+        .containsEntry("building_count", 2L)
+        .containsEntry("space_count", 1L)
+        .containsEntry("occupied_space_count", 1L);
+    assertThat(people)
+        .containsEntry("active_resident_count", 1L)
+        .containsEntry("active_assignment_count", 1L);
+    assertThat(maintenanceSummary)
+        .containsEntry("open_request_count", 1L)
+        .containsEntry("overdue_request_count", 1L);
+    @SuppressWarnings("unchecked")
+    var balances =
+        (List<Map<String, Object>>)
+            ((Map<String, Object>) dashboard.get("finance")).get("balance_by_currency");
+    assertThat(balances)
+        .containsExactly(
+            Map.of("currency", "EUR", "amount", "19.95"),
+            Map.of("currency", "USD", "amount", "750.00"));
+
+    assertThat(tenants.dashboard(admin, org)).isEqualTo(dashboard);
+
+    String managerEmail = "dashboard-manager-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        owner,
+        org,
+        managerEmail,
+        "Manager",
+        password,
+        false,
+        building,
+        Set.of(Role.PROPERTY_MANAGER));
+    var managerDashboard = tenants.dashboard(actor(managerEmail), org);
+    @SuppressWarnings("unchecked")
+    var managerProperties = (Map<String, Object>) managerDashboard.get("properties");
+    assertThat(managerProperties).containsEntry("building_count", 1L);
+    assertThat(managerDashboard.get("people")).isNotNull();
+    assertThat(managerDashboard.get("finance")).isNotNull();
+    assertThat(managerDashboard.get("maintenance")).isNotNull();
+
+    String accountantEmail = "dashboard-accountant-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        owner,
+        org,
+        accountantEmail,
+        "Accountant",
+        password,
+        false,
+        building,
+        Set.of(Role.ACCOUNTANT));
+    var accountantDashboard = tenants.dashboard(actor(accountantEmail), org);
+    assertThat(accountantDashboard.get("people")).isNull();
+    assertThat(accountantDashboard.get("finance")).isNotNull();
+    assertThat(accountantDashboard.get("maintenance")).isNull();
+
+    String staffEmail = "dashboard-staff-" + UUID.randomUUID() + "@example.test";
+    UUID staffAccount =
+        (UUID)
+            tenants
+                .invite(
+                    owner,
+                    org,
+                    staffEmail,
+                    "Maintenance",
+                    password,
+                    false,
+                    building,
+                    Set.of(Role.MAINTENANCE_STAFF))
+                .get("id");
+    maintenance.assignStaff(owner, org, building, request, staffAccount, null);
+    var staffDashboard = tenants.dashboard(actor(staffEmail), org);
+    assertThat(staffDashboard.get("people")).isNull();
+    assertThat(staffDashboard.get("finance")).isNull();
+    @SuppressWarnings("unchecked")
+    var staffMaintenance = (Map<String, Object>) staffDashboard.get("maintenance");
+    assertThat(staffMaintenance).containsEntry("open_request_count", 1L);
+
+    String vendorEmail = "dashboard-vendor-" + UUID.randomUUID() + "@example.test";
+    UUID vendorAccount =
+        (UUID)
+            tenants
+                .invite(
+                    owner,
+                    org,
+                    vendorEmail,
+                    "Vendor",
+                    password,
+                    false,
+                    building,
+                    Set.of(Role.VENDOR))
+                .get("id");
+    UUID vendorRequest =
+        maintenance.submit(
+            owner, org, building, space, category, "Window", "Broken window", Impact.MEDIUM, false);
+    maintenance.triage(owner, org, building, vendorRequest, Priority.MEDIUM, null);
+    UUID vendor =
+        maintenance.createVendor(
+            owner, org, building, "Glass team", vendorEmail, null, vendorAccount);
+    maintenance.assignVendor(owner, org, building, vendorRequest, vendor, null);
+    var vendorDashboard = tenants.dashboard(actor(vendorEmail), org);
+    assertThat(vendorDashboard.get("people")).isNull();
+    assertThat(vendorDashboard.get("finance")).isNull();
+    @SuppressWarnings("unchecked")
+    var vendorMaintenance = (Map<String, Object>) vendorDashboard.get("maintenance");
+    assertThat(vendorMaintenance).containsEntry("open_request_count", 1L);
+
+    String unrelatedEmail = "dashboard-unrelated-" + UUID.randomUUID() + "@example.test";
+    UUID unrelated =
+        (UUID)
+            tenants
+                .invite(owner, org, unrelatedEmail, "Member", password, false, null, Set.of())
+                .get("id");
+    var unrelatedDashboard = tenants.dashboard(actor(unrelatedEmail), org);
+    assertThat(unrelatedDashboard.get("people")).isNull();
+    assertThat(unrelatedDashboard.get("finance")).isNull();
+    assertThat(unrelatedDashboard.get("maintenance")).isNull();
+    @SuppressWarnings("unchecked")
+    var unrelatedProperties = (Map<String, Object>) unrelatedDashboard.get("properties");
+    assertThat(unrelatedProperties).containsEntry("building_count", 0L);
+
+    UUID otherOrganization = organization("dashboard-other-" + UUID.randomUUID() + "@example.test");
+    assertThatThrownBy(() -> tenants.dashboard(actor(unrelatedEmail), otherOrganization))
+        .isInstanceOfSatisfying(
+            ApiException.class, error -> assertThat(error.status).isEqualTo(403));
+    tenants.membership(owner, org, unrelated, false, true);
+    assertThatThrownBy(() -> tenants.dashboard(actor(unrelatedEmail), org))
+        .isInstanceOfSatisfying(
+            ApiException.class, error -> assertThat(error.status).isEqualTo(403));
   }
 
   @Test

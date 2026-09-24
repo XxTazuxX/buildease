@@ -43,6 +43,15 @@ export function useOrgAccess(org: string) {
     enabled: !!org,
   });
 }
+export function useWorkspaceContext(org: string) {
+  const access = useOrgAccess(org);
+  const buildings = useQuery({
+    queryKey: [org, "buildings"],
+    queryFn: () => adminApi.buildings(org, 0),
+    enabled: !!org,
+  });
+  return { access, buildings };
+}
 export function useWorkspace(org: string, building: string, page: number) {
   const access = useQuery({
     queryKey: [org, "access"],
