@@ -1,0 +1,27 @@
+services:
+  app:
+    image: eclipse-temurin:26-jre
+    container_name: buildease
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    ports:
+      - "${APP_PORT:-4567}:8080"
+
+    volumes:
+      - ./buildease.jar:/app/buildease.jar:ro
+
+    working_dir: /app
+
+    command: ["java", "-jar", "buildease.jar"]
+
+    networks:
+      - default
+      - vending-network
+
+networks:
+  vending-network:
+    external: true
+    name: vending-tracking_vending-network

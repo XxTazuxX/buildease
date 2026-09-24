@@ -14,7 +14,7 @@ e2e:
 package:
 	cd backend && ./mvnw -Pbundle-ui clean package
 run:
-	set -a; source .env; set +a; java -jar backend/target/buildease-*.jar
+	set -a; source .env; set +a; java -jar backend/target/buildease-*.jar --server.port=4567
 dev-backend:
 	set -a; source .env; set +a; cd backend && ./mvnw spring-boot:run
 dev-frontend:
