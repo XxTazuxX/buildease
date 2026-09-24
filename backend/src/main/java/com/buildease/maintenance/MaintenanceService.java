@@ -71,6 +71,33 @@ public class MaintenanceService {
     return id;
   }
 
+  public void updateCategory(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID category,
+      String name,
+      int responseHours,
+      int resolutionHours) {
+    manager(actor, organization, building);
+    if (resolutionHours < responseHours)
+      throw new ApiException(400, "Resolution target must not precede response target");
+    db.one(
+        "select id from maintenance_categories where organization_id=? and building_id=? and id=? and active for update",
+        organization,
+        building,
+        category);
+    db.update(
+        "update maintenance_categories set name=?,response_minutes=?,resolution_minutes=? where organization_id=? and building_id=? and id=?",
+        name.trim(),
+        responseHours * 60,
+        resolutionHours * 60,
+        organization,
+        building,
+        category);
+    db.audit(actor.id(), organization, "MAINTENANCE_CATEGORY_UPDATED", category);
+  }
+
   public List<Map<String, Object>> categories(Actor actor, UUID organization, UUID building) {
     enter(actor, organization, building);
     return db.rows(

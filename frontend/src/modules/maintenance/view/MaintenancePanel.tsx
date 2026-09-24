@@ -6,6 +6,7 @@ import {
   Chip,
   DialogContent,
   DialogTitle,
+  Divider,
   Paper,
   Stack,
   TextField,
@@ -27,11 +28,16 @@ export function MaintenancePanel({
   const vm = useMaintenance(org, building);
   const [createOpen, setCreateOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [category, setCategory] = useState({
     name: "",
     responseHours: 4,
     resolutionHours: 48,
   });
+  const resetCategoryForm = () => {
+    setEditingCategory(null);
+    setCategory({ name: "", responseHours: 4, resolutionHours: 48 });
+  };
   const error =
     vm.error ||
     vm.categories.error?.message ||
@@ -59,7 +65,7 @@ export function MaintenancePanel({
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           {canManage && (
             <Button variant="outlined" onClick={() => setCategoryOpen(true)}>
-              Add category
+              Categories
             </Button>
           )}
           <Button variant="contained" onClick={() => setCreateOpen(true)}>
@@ -194,13 +200,69 @@ export function MaintenancePanel({
       />
       <AdaptiveDialog
         open={categoryOpen}
-        onClose={() => setCategoryOpen(false)}
+        onClose={() => {
+          setCategoryOpen(false);
+          resetCategoryForm();
+        }}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add maintenance category</DialogTitle>
+        <DialogTitle>Maintenance categories</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
+            {!vm.categories.isLoading && vm.categories.data?.length === 0 ? (
+              <Typography color="text.secondary">
+                No categories yet. Add the first one below.
+              </Typography>
+            ) : (
+              <Stack spacing={1}>
+                {vm.categories.data?.map((item) => (
+                  <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
+                    <Stack
+                      direction="row"
+                      sx={{
+                        gap: 1.5,
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Box>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {item.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Respond within{" "}
+                          {Math.round(item.response_minutes / 60)}h · resolve
+                          within {Math.round(item.resolution_minutes / 60)}h ·
+                          default priority {item.default_priority}
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setEditingCategory(item.id);
+                          setCategory({
+                            name: item.name,
+                            responseHours: Math.round(
+                              item.response_minutes / 60,
+                            ),
+                            resolutionHours: Math.round(
+                              item.resolution_minutes / 60,
+                            ),
+                          });
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+            <Divider />
+            <Typography variant="subtitle2">
+              {editingCategory ? "Edit category" : "Add a category"}
+            </Typography>
             <TextField
               label="Category name"
               value={category.name}
@@ -230,17 +292,24 @@ export function MaintenancePanel({
                 })
               }
             />
-            <Button
-              variant="contained"
-              disabled={vm.busy || !category.name.trim()}
-              onClick={() =>
-                void vm
-                  .createCategory(category)
-                  .then((ok) => ok && setCategoryOpen(false))
-              }
-            >
-              Create category
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                disabled={vm.busy || !category.name.trim()}
+                onClick={() =>
+                  void (
+                    editingCategory
+                      ? vm.updateCategory(editingCategory, category)
+                      : vm.createCategory(category)
+                  ).then((ok) => ok && resetCategoryForm())
+                }
+              >
+                {editingCategory ? "Save changes" : "Create category"}
+              </Button>
+              {editingCategory && (
+                <Button onClick={resetCategoryForm}>Cancel</Button>
+              )}
+            </Stack>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>

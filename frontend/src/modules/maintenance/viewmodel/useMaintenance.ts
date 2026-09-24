@@ -90,6 +90,10 @@ export function useMaintenance(org: string, building: string) {
       responseHours: number;
       resolutionHours: number;
     }) => run(() => maintenanceApi.createCategory(org, building, body)),
+    updateCategory: (
+      id: string,
+      body: { name: string; responseHours: number; resolutionHours: number },
+    ) => run(() => maintenanceApi.updateCategory(org, building, id, body)),
     triage: (id: string, priority: Priority) =>
       run(() =>
         maintenanceApi.triage(

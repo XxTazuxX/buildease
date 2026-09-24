@@ -67,6 +67,12 @@ export const maintenanceApi = {
     building: string,
     body: { name: string; responseHours: number; resolutionHours: number },
   ) => api(`${base(org, building)}/categories`, "POST", body),
+  updateCategory: (
+    org: string,
+    building: string,
+    category: string,
+    body: { name: string; responseHours: number; resolutionHours: number },
+  ) => api(`${base(org, building)}/categories/${category}`, "PATCH", body),
   requests: (org: string, building: string) =>
     api<MaintenanceRequest[]>(`${base(org, building)}/requests`),
   detail: (org: string, building: string, request: string) =>

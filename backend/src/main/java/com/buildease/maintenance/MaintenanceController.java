@@ -91,6 +91,23 @@ public class MaintenanceController {
             body.resolutionHours()));
   }
 
+  @PatchMapping("/categories/{category}")
+  void updateCategory(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID category,
+      @Valid @RequestBody CategoryBody body) {
+    service.updateCategory(
+        actor,
+        organization,
+        building,
+        category,
+        body.name(),
+        body.responseHours(),
+        body.resolutionHours());
+  }
+
   @GetMapping("/requests")
   Object requests(
       @RequestAttribute Actor actor,

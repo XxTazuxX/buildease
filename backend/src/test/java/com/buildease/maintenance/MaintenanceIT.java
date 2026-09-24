@@ -154,6 +154,21 @@ class MaintenanceIT {
 
     Actor tenant = actor(residentEmail);
     UUID category = maintenance.createCategory(owner, org, building, "Plumbing", 4, 48);
+    maintenance.updateCategory(owner, org, building, category, "Plumbing & Water", 2, 24);
+    assertThat(maintenance.categories(owner, org, building))
+        .anySatisfy(
+            row ->
+                assertThat(row)
+                    .containsEntry("id", category)
+                    .containsEntry("name", "Plumbing & Water")
+                    .containsEntry("response_minutes", 120)
+                    .containsEntry("resolution_minutes", 1440));
+    assertThatThrownBy(
+            () -> maintenance.updateCategory(tenant, org, building, category, "Nope", 4, 48))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    assertThatThrownBy(
+            () -> maintenance.updateCategory(owner, org, building, category, "Bad", 48, 4))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(400));
     UUID request =
         maintenance.submit(
             tenant,

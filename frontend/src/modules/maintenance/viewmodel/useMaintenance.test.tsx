@@ -20,6 +20,7 @@ vi.mock("../model/maintenance", async (importOriginal) => {
       resolve: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       createCategory: vi.fn().mockResolvedValue(undefined),
+      updateCategory: vi.fn().mockResolvedValue(undefined),
       preparePhoto: vi.fn(),
     },
     stripPhotoMetadata: vi.fn(),
@@ -135,6 +136,30 @@ it("surfaces the failure message and does not invalidate when a command rejects"
   });
   expect(outcome).toBe(false);
   await waitFor(() => expect(result.current.error).toBe("Not assigned"));
+});
+
+it("updateCategory calls the api with the category id and invalidates on success", async () => {
+  const { result } = renderHook(() => useMaintenance("org", "building"), {
+    wrapper,
+  });
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const body = {
+    name: "Plumbing & Water",
+    responseHours: 2,
+    resolutionHours: 24,
+  };
+  let outcome: boolean | undefined;
+  await act(async () => {
+    outcome = await result.current.updateCategory("cat-1", body);
+  });
+  expect(outcome).toBe(true);
+  expect(maintenanceApi.updateCategory).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "cat-1",
+    body,
+  );
+  expect(invalidate).toHaveBeenCalled();
 });
 
 it("useRequestDetail fetches the request and invalidates it after commenting", async () => {
