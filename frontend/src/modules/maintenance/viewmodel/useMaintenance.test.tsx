@@ -2,7 +2,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
-import { useMaintenance } from "./useMaintenance";
+import { useMaintenance, useRequestDetail } from "./useMaintenance";
 import { maintenanceApi, stripPhotoMetadata } from "../model/maintenance";
 
 vi.mock("../model/maintenance", async (importOriginal) => {
@@ -12,7 +12,9 @@ vi.mock("../model/maintenance", async (importOriginal) => {
     maintenanceApi: {
       categories: vi.fn().mockResolvedValue([]),
       requests: vi.fn().mockResolvedValue([]),
+      detail: vi.fn(),
       submit: vi.fn(),
+      comment: vi.fn().mockResolvedValue({ id: "comment-1" }),
       triage: vi.fn().mockResolvedValue(undefined),
       start: vi.fn().mockResolvedValue(undefined),
       resolve: vi.fn().mockResolvedValue(undefined),
@@ -133,4 +135,39 @@ it("surfaces the failure message and does not invalidate when a command rejects"
   });
   expect(outcome).toBe(false);
   await waitFor(() => expect(result.current.error).toBe("Not assigned"));
+});
+
+it("useRequestDetail fetches the request and invalidates it after commenting", async () => {
+  vi.mocked(maintenanceApi.detail).mockResolvedValue({
+    id: "req-1",
+    space_id: "space-1",
+    category_id: "cat-1",
+    title: "Leaking tap",
+    impact: "MEDIUM",
+    danger: false,
+    suggested_priority: "MEDIUM",
+    priority: "MEDIUM",
+    status: "SUBMITTED",
+    response_due_at: null,
+    resolution_due_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    comments: [],
+  });
+  const { result } = renderHook(
+    () => useRequestDetail("org", "building", "req-1"),
+    { wrapper },
+  );
+  await waitFor(() => expect(result.current.query.data?.id).toBe("req-1"));
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  await act(async () => {
+    await result.current.comment("Any update?");
+  });
+  expect(maintenanceApi.comment).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "req-1",
+    "Any update?",
+  );
+  expect(invalidate).toHaveBeenCalled();
 });

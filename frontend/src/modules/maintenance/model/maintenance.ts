@@ -47,6 +47,16 @@ export const requestSchema = z.object({
   danger: z.boolean(),
 });
 export type NewMaintenanceRequest = z.infer<typeof requestSchema>;
+export interface Comment {
+  id: string;
+  actor_id: string;
+  body: string;
+  internal: boolean;
+  created_at: string;
+}
+export interface MaintenanceRequestDetail extends MaintenanceRequest {
+  comments: Comment[];
+}
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/maintenance`;
 export const maintenanceApi = {
@@ -59,8 +69,19 @@ export const maintenanceApi = {
   ) => api(`${base(org, building)}/categories`, "POST", body),
   requests: (org: string, building: string) =>
     api<MaintenanceRequest[]>(`${base(org, building)}/requests`),
+  detail: (org: string, building: string, request: string) =>
+    api<MaintenanceRequestDetail>(`${base(org, building)}/requests/${request}`),
   submit: (org: string, building: string, body: NewMaintenanceRequest) =>
     api<{ id: string }>(`${base(org, building)}/requests`, "POST", body),
+  comment: (org: string, building: string, request: string, body: string) =>
+    api<{ id: string }>(
+      `${base(org, building)}/requests/${request}/comments`,
+      "POST",
+      {
+        body,
+        internal: false,
+      },
+    ),
   triage: (
     org: string,
     building: string,

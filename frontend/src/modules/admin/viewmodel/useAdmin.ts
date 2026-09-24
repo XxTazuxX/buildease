@@ -36,6 +36,13 @@ export function usePlatform(kind: "organizations" | "accounts", page: number) {
         : adminApi.accounts(page),
   });
 }
+export function useOrgAccess(org: string) {
+  return useQuery({
+    queryKey: [org, "access"],
+    queryFn: () => adminApi.access(org),
+    enabled: !!org,
+  });
+}
 export function useWorkspace(org: string, building: string, page: number) {
   const access = useQuery({
     queryKey: [org, "access"],

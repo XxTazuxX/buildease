@@ -29,7 +29,7 @@ app:
   secure-cookies: ${SECURE_COOKIES:true}
   bootstrap-email: ${BOOTSTRAP_EMAIL:}
   bootstrap-password: ${BOOTSTRAP_PASSWORD:}
-  public-url: ${PUBLIC_URL:http://localhost:5173}
+  public-url: ${PUBLIC_URL:http://localhost:8080}
   mail-from: ${MAIL_FROM:}
   web-push-public-key: ${WEB_PUSH_PUBLIC_KEY:}
   automation-delay-ms: ${AUTOMATION_DELAY_MS:60000}

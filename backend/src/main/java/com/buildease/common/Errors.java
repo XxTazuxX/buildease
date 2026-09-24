@@ -5,12 +5,18 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class Errors {
   @ExceptionHandler(ApiException.class)
   ResponseEntity<?> api(ApiException e) {
     return ResponseEntity.status(e.status).body(Map.of("message", e.getMessage()));
+  }
+
+  @ExceptionHandler(NoResourceFoundException.class)
+  ResponseEntity<?> noResource(NoResourceFoundException e) {
+    return ResponseEntity.notFound().build();
   }
 
   @ExceptionHandler({

@@ -1,1 +1,10 @@
 graphify-out/graph.json merge=graphify
+
+# Normalize all text files to LF regardless of platform/autocrlf settings.
+# On Windows with core.autocrlf=true, git otherwise checks these out as CRLF,
+# which breaks `make`/`sh`/`bash` invocation (Makefile, mvnw, *.sh) and makes
+# Prettier's format:check fail repo-wide on files nobody actually edited.
+* text=auto eol=lf
+
+# mvnw.cmd is a native Windows batch file and should keep CRLF.
+mvnw.cmd text eol=crlf

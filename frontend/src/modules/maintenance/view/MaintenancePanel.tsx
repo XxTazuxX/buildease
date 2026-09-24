@@ -3,20 +3,17 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
-import { impacts, type Impact } from "../model/maintenance";
 import { useMaintenance } from "../viewmodel/useMaintenance";
+import { ReportIssueDialog } from "./ReportIssueDialog";
 
 export function MaintenancePanel({
   org,
@@ -30,15 +27,6 @@ export function MaintenancePanel({
   const vm = useMaintenance(org, building);
   const [createOpen, setCreateOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [photo, setPhoto] = useState<File>();
-  const [request, setRequest] = useState({
-    spaceId: "",
-    categoryId: "",
-    title: "",
-    description: "",
-    impact: "MEDIUM" as Impact,
-    danger: false,
-  });
   const [category, setCategory] = useState({
     name: "",
     responseHours: 4,
@@ -199,112 +187,11 @@ export function MaintenancePanel({
           );
         })}
       </Stack>
-      <AdaptiveDialog
+      <ReportIssueDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Report maintenance issue</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              select
-              label="Space"
-              value={request.spaceId}
-              onChange={(e) =>
-                setRequest({ ...request, spaceId: e.target.value })
-              }
-            >
-              {vm.spaces.data?.map((space) => (
-                <MenuItem key={space.id} value={space.id}>
-                  {space.name} · {space.code}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Category"
-              value={request.categoryId}
-              onChange={(e) =>
-                setRequest({ ...request, categoryId: e.target.value })
-              }
-            >
-              {vm.categories.data?.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {item.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Short title"
-              value={request.title}
-              onChange={(e) =>
-                setRequest({ ...request, title: e.target.value })
-              }
-              slotProps={{ htmlInput: { maxLength: 160 } }}
-            />
-            <TextField
-              label="What happened?"
-              multiline
-              minRows={4}
-              value={request.description}
-              onChange={(e) =>
-                setRequest({ ...request, description: e.target.value })
-              }
-              slotProps={{ htmlInput: { maxLength: 4000 } }}
-            />
-            <TextField
-              select
-              label="Impact"
-              value={request.impact}
-              onChange={(e) =>
-                setRequest({ ...request, impact: e.target.value as Impact })
-              }
-            >
-              {impacts.map((impact) => (
-                <MenuItem key={impact} value={impact}>
-                  {impact}
-                </MenuItem>
-              ))}
-            </TextField>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={request.danger}
-                  onChange={(_, checked) =>
-                    setRequest({ ...request, danger: checked })
-                  }
-                />
-              }
-              label="This may be dangerous or cause immediate damage"
-            />
-            <Button component="label" variant="outlined">
-              {photo ? `Photo: ${photo.name}` : "Add a photo (optional)"}
-              <input
-                hidden
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => setPhoto(event.target.files?.[0])}
-              />
-            </Button>
-            <Button
-              variant="contained"
-              disabled={vm.busy || !request.spaceId || !request.categoryId}
-              onClick={() =>
-                void vm.submit(request, photo).then((ok) => {
-                  if (ok) {
-                    setPhoto(undefined);
-                    setCreateOpen(false);
-                  }
-                })
-              }
-            >
-              Submit request
-            </Button>
-          </Stack>
-        </DialogContent>
-      </AdaptiveDialog>
+        vm={vm}
+      />
       <AdaptiveDialog
         open={categoryOpen}
         onClose={() => setCategoryOpen(false)}

@@ -37,6 +37,7 @@ import { ChangePasswordPage, LoginPage } from "@/modules/auth/view/AuthPages";
 import {
   useAction,
   useAdminCommands,
+  useOrgAccess,
 } from "@/modules/admin/viewmodel/useAdmin";
 import { BrandMark } from "@/shared/components/BrandMark";
 import { OfflineNotice } from "@/shared/components/OfflineNotice";
@@ -54,6 +55,30 @@ const WorkspacePage = lazy(() =>
     default: m.WorkspacePage,
   })),
 );
+const TenantPortalPage = lazy(() =>
+  import("@/modules/tenant-portal/view/TenantPortalPage").then((m) => ({
+    default: m.TenantPortalPage,
+  })),
+);
+const elevatedRoles = new Set([
+  "PROPERTY_MANAGER",
+  "ACCOUNTANT",
+  "MAINTENANCE_STAFF",
+  "SECURITY_OPERATIONS_STAFF",
+  "VENDOR",
+]);
+export function isTenantOnly(
+  platformAdmin: boolean,
+  access: { owner: boolean; roles: { role: string }[] } | undefined,
+): boolean {
+  return (
+    !platformAdmin &&
+    !!access &&
+    !access.owner &&
+    access.roles.length > 0 &&
+    !access.roles.some((r) => elevatedRoles.has(r.role))
+  );
+}
 
 function OrganizationRoute() {
   const { org } = useParams();
@@ -82,16 +107,20 @@ export default function App() {
   const [org, setOrg] = useState("");
   const action = useAction();
   const commands = useAdminCommands();
+  const memberships = (auth.profile?.memberships ?? []).filter(
+    (m) => m.status === "ACTIVE",
+  );
+  const activeOrg = memberships.some((m) => m.organization_id === org)
+    ? org
+    : memberships[0]?.organization_id || "";
+  const orgAccess = useOrgAccess(activeOrg);
 
   if (!auth.ready) return <LoadingScreen />;
   if (auth.mustChange) return <ChangePasswordPage />;
   if (!auth.profile) return <LoginPage />;
 
   const profile = auth.profile;
-  const memberships = profile.memberships.filter((m) => m.status === "ACTIVE");
-  const activeOrg = memberships.some((m) => m.organization_id === org)
-    ? org
-    : memberships[0]?.organization_id || "";
+  const tenantOnly = isTenantOnly(profile.platform_admin, orgAccess.data);
   const initials = profile.display_name
     .split(" ")
     .map((part) => part[0])
@@ -300,7 +329,15 @@ export default function App() {
           </Paper>
         ))}
       {activeOrg ? (
-        <WorkspacePage key={activeOrg} org={activeOrg} />
+        orgAccess.isLoading ? (
+          <Box sx={{ py: 10, textAlign: "center" }}>
+            <CircularProgress aria-label="Loading workspace" />
+          </Box>
+        ) : tenantOnly ? (
+          <TenantPortalPage key={activeOrg} org={activeOrg} />
+        ) : (
+          <WorkspacePage key={activeOrg} org={activeOrg} />
+        )
       ) : (
         <Paper sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h5" gutterBottom>

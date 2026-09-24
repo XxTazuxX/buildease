@@ -114,3 +114,22 @@ export function useMaintenance(org: string, building: string) {
       ),
   };
 }
+
+export function useRequestDetail(
+  org: string,
+  building: string,
+  request: string,
+) {
+  const cache = useQueryClient();
+  const key = [org, "building", building, "maintenance", "requests", request];
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => maintenanceApi.detail(org, building, request),
+    enabled: !!request,
+  });
+  const comment = async (body: string) => {
+    await maintenanceApi.comment(org, building, request, body);
+    await cache.invalidateQueries({ queryKey: key });
+  };
+  return { query, comment };
+}

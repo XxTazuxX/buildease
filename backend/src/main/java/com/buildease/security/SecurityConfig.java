@@ -81,8 +81,10 @@ public class SecurityConfig {
                         "/api/auth/forgot-password",
                         "/api/auth/reset-password")
                     .permitAll()
+                    .requestMatchers("/api/**")
+                    .authenticated()
                     .anyRequest()
-                    .authenticated())
+                    .permitAll())
         .oauth2ResourceServer(o -> o.jwt(j -> {}))
         .exceptionHandling(
             e ->
