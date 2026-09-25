@@ -225,7 +225,7 @@ test("property manager delegates a tenant role without owner privileges", async 
 
 test("tenant users continue to receive the tenant portal", async ({ page }) => {
   await firstLogin(page, "tenant@example.test");
-  await expect(page.getByText("My home", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "My home" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Your lease, unit, and requests" }),
   ).toBeVisible();

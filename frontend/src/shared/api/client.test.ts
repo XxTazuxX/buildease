@@ -147,9 +147,11 @@ it("downloadFile attaches the bearer token and triggers a browser download", asy
         }),
       ),
     )
-    .mockResolvedValueOnce(
-      new Response(new Blob(["a,b\n1,2"], { type: "text/csv" })),
-    );
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      blob: () => Promise.resolve(new Blob(["a,b\n1,2"], { type: "text/csv" })),
+    });
   vi.stubGlobal("fetch", fetch);
   const createObjectURL = vi
     .fn()

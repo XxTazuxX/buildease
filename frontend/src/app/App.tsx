@@ -666,7 +666,7 @@ export default function App() {
               >
                 {context.buildings.data.map((item) => (
                   <MenuItem key={item.id} value={item.id}>
-                    {item.name}
+                    {item.name} · {item.code}
                   </MenuItem>
                 ))}
               </TextField>

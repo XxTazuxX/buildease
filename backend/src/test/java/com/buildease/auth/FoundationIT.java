@@ -467,6 +467,7 @@ class FoundationIT {
                     building,
                     Set.of(Role.MAINTENANCE_STAFF))
                 .get("id");
+    maintenance.triage(owner, org, building, request, Priority.MEDIUM, null);
     maintenance.assignStaff(owner, org, building, request, staffAccount, null);
     var staffDashboard = tenants.dashboard(actor(staffEmail), org);
     assertThat(staffDashboard.get("people")).isNull();
