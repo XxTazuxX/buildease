@@ -29,6 +29,11 @@ export function useMaintenance(org: string, building: string) {
     queryFn: () => buildingsApi.spaces(org, building),
     enabled: !!building,
   });
+  const vendors = useQuery({
+    queryKey: [...key, "vendors"],
+    queryFn: () => maintenanceApi.vendors(org, building),
+    enabled: !!building,
+  });
   const run = async (operation: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
@@ -47,6 +52,7 @@ export function useMaintenance(org: string, building: string) {
     categories,
     requests,
     spaces,
+    vendors,
     error,
     busy,
     submit: async (body: NewMaintenanceRequest, file?: File) => {
@@ -116,6 +122,32 @@ export function useMaintenance(org: string, building: string) {
           confirmed ? "CONFIRMED" : "REJECTED",
         ),
       ),
+    assignStaff: (request: string, accountId: string, estimatedCost?: number) =>
+      run(() =>
+        maintenanceApi.assignStaff(
+          org,
+          building,
+          request,
+          accountId,
+          estimatedCost,
+        ),
+      ),
+    assignVendor: (request: string, vendorId: string, estimatedCost?: number) =>
+      run(() =>
+        maintenanceApi.assignVendor(
+          org,
+          building,
+          request,
+          vendorId,
+          estimatedCost,
+        ),
+      ),
+    createVendor: (body: {
+      name: string;
+      email?: string;
+      phone?: string;
+      accountId?: string;
+    }) => run(() => maintenanceApi.createVendor(org, building, body)),
   };
 }
 
@@ -125,15 +157,74 @@ export function useRequestDetail(
   request: string,
 ) {
   const cache = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const key = [org, "building", building, "maintenance", "requests", request];
   const query = useQuery({
     queryKey: key,
     queryFn: () => maintenanceApi.detail(org, building, request),
     enabled: !!request,
   });
-  const comment = async (body: string) => {
-    await maintenanceApi.comment(org, building, request, body);
-    await cache.invalidateQueries({ queryKey: key });
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      await cache.invalidateQueries({ queryKey: key });
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Operation failed");
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
-  return { query, comment };
+  const comment = async (body: string, internal = false) =>
+    run(() => maintenanceApi.comment(org, building, request, body, internal));
+  const addWorkLog = (workOrder: string, note: string, minutes?: number) =>
+    run(() =>
+      maintenanceApi.addWorkLog(org, building, workOrder, note, minutes),
+    );
+  const updateWorkCosts = (
+    workOrder: string,
+    body: { estimatedCost?: number; actualCost?: number },
+  ) =>
+    run(() => maintenanceApi.updateWorkCosts(org, building, workOrder, body));
+  const uploadPhoto = async (file: File) => {
+    setBusy(true);
+    setError("");
+    try {
+      const photo = await stripPhotoMetadata(file);
+      const upload = await maintenanceApi.preparePhoto(
+        org,
+        building,
+        request,
+        photo,
+      );
+      const response = await fetch(upload.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": upload.contentType },
+        body: photo,
+      });
+      if (!response.ok) throw new Error("Photo upload failed");
+      await cache.invalidateQueries({ queryKey: key });
+      return true;
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Failed to upload photo",
+      );
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return {
+    query,
+    busy,
+    error,
+    comment,
+    addWorkLog,
+    updateWorkCosts,
+    uploadPhoto,
+  };
 }

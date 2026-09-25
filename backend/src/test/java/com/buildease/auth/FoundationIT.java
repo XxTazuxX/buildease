@@ -107,7 +107,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(10);
+    assertThat(flyway.info().applied()).hasSize(13);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
@@ -536,7 +536,9 @@ class FoundationIT {
         "lk",
         "Asia/Colombo",
         "lkr",
-        "+94 11 555 0100");
+        "+94 11 555 0100",
+        null,
+        5);
     UUID level =
         buildingConfigurations.createLevel(owner, organization, building, "Level 1", "l1", 1);
     UUID flat =

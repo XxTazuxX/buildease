@@ -69,6 +69,28 @@ public class RentAutomation {
             lease.get("id"));
         db.audit(actor, organization, "RENT_CHARGE_GENERATED", charge);
       }
+      for (var lease :
+          db.rows(
+              "select l.id,l.building_id,l.currency,b.late_fee_amount,"
+                  + "(select min(due_on) from charges where lease_id=l.id and due_on<current_date) as oldest_due "
+                  + "from leases l join buildings b on b.id=l.building_id "
+                  + "where l.organization_id=? and l.status='ACTIVE' and b.late_fee_amount is not null and b.late_fee_amount>0"
+                  + " and exists(select 1 from charges c where c.lease_id=l.id and c.due_on<=current_date-(b.late_fee_grace_days||' days')::interval)"
+                  + " and coalesce((select sum(amount) from charges where lease_id=l.id),0)>coalesce((select sum(amount) from payments where lease_id=l.id),0)",
+              organization)) {
+        UUID lateFee = UUID.randomUUID();
+        int inserted =
+            db.update(
+                "insert into charges(id,organization_id,building_id,lease_id,type,amount,currency,due_on) values (?,?,?,?,'LATE_FEE',?,?,?) on conflict (lease_id,due_on) where type='LATE_FEE' do nothing",
+                lateFee,
+                organization,
+                lease.get("building_id"),
+                lease.get("id"),
+                lease.get("late_fee_amount"),
+                lease.get("currency"),
+                lease.get("oldest_due"));
+        if (inserted == 1) db.audit(actor, organization, "LATE_FEE_CHARGED", lateFee);
+      }
       var overdue =
           db.rows(
               "select l.id,l.building_id from leases l where l.organization_id=? and l.status='ACTIVE'"

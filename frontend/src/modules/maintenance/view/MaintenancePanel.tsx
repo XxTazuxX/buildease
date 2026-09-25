@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -15,6 +16,7 @@ import {
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useMaintenance } from "../viewmodel/useMaintenance";
 import { ReportIssueDialog } from "./ReportIssueDialog";
+import { RequestDetailDialog } from "./RequestDetailDialog";
 
 export function MaintenancePanel({
   org,
@@ -31,6 +33,21 @@ export function MaintenancePanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<string | null>(null);
+  const [assigningRequest, setAssigningRequest] = useState<string | null>(null);
+  const [vendorsOpen, setVendorsOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<"staff" | "vendor">(
+    "vendor",
+  );
+  const [assignAccountId, setAssignAccountId] = useState("");
+  const [assignVendorId, setAssignVendorId] = useState("");
+  const [assignEstimate, setAssignEstimate] = useState("");
+  const [newVendor, setNewVendor] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    accountId: "",
+  });
   const [category, setCategory] = useState({
     name: "",
     responseHours: 4,
@@ -68,6 +85,11 @@ export function MaintenancePanel({
           {canManage && (
             <Button variant="outlined" onClick={() => setCategoryOpen(true)}>
               Categories
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="outlined" onClick={() => setVendorsOpen(true)}>
+              Vendors
             </Button>
           )}
           {canReport && (
@@ -154,6 +176,9 @@ export function MaintenancePanel({
                   </Typography>
                 </Box>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button onClick={() => setViewingRequest(item.id)}>
+                    View
+                  </Button>
                   {canManage && item.status === "SUBMITTED" && (
                     <Button
                       disabled={vm.busy}
@@ -162,6 +187,20 @@ export function MaintenancePanel({
                       }
                     >
                       Confirm priority
+                    </Button>
+                  )}
+                  {canManage && item.status === "TRIAGED" && (
+                    <Button
+                      disabled={vm.busy}
+                      onClick={() => {
+                        setAssignTarget("vendor");
+                        setAssignAccountId("");
+                        setAssignVendorId("");
+                        setAssignEstimate("");
+                        setAssigningRequest(item.id);
+                      }}
+                    >
+                      Assign
                     </Button>
                   )}
                   {item.status === "ASSIGNED" && (
@@ -316,6 +355,182 @@ export function MaintenancePanel({
                 <Button onClick={resetCategoryForm}>Cancel</Button>
               )}
             </Stack>
+          </Stack>
+        </DialogContent>
+      </AdaptiveDialog>
+
+      {viewingRequest && (
+        <RequestDetailDialog
+          org={org}
+          building={building}
+          request={viewingRequest}
+          canManage={canManage}
+          onClose={() => setViewingRequest(null)}
+        />
+      )}
+
+      {assigningRequest && (
+        <AdaptiveDialog
+          open
+          onClose={() => setAssigningRequest(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Assign work</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <TextField
+                select
+                label="Assign to"
+                value={assignTarget}
+                onChange={(e) =>
+                  setAssignTarget(e.target.value as "staff" | "vendor")
+                }
+              >
+                <MenuItem value="vendor">Vendor</MenuItem>
+                <MenuItem value="staff">Staff account</MenuItem>
+              </TextField>
+              {assignTarget === "vendor" ? (
+                <TextField
+                  select
+                  label="Vendor"
+                  value={assignVendorId}
+                  onChange={(e) => setAssignVendorId(e.target.value)}
+                >
+                  {vm.vendors.data?.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ) : (
+                <TextField
+                  label="Staff account ID"
+                  helperText="Copy the account ID from the People page"
+                  value={assignAccountId}
+                  onChange={(e) => setAssignAccountId(e.target.value)}
+                />
+              )}
+              <TextField
+                label="Estimated cost (optional)"
+                type="number"
+                value={assignEstimate}
+                onChange={(e) => setAssignEstimate(e.target.value)}
+              />
+              <Button
+                variant="contained"
+                disabled={
+                  vm.busy ||
+                  (assignTarget === "vendor"
+                    ? !assignVendorId
+                    : !assignAccountId)
+                }
+                onClick={() =>
+                  void (
+                    assignTarget === "vendor"
+                      ? vm.assignVendor(
+                          assigningRequest,
+                          assignVendorId,
+                          assignEstimate ? Number(assignEstimate) : undefined,
+                        )
+                      : vm.assignStaff(
+                          assigningRequest,
+                          assignAccountId,
+                          assignEstimate ? Number(assignEstimate) : undefined,
+                        )
+                  ).then((ok) => ok && setAssigningRequest(null))
+                }
+              >
+                Assign
+              </Button>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
+
+      <AdaptiveDialog
+        open={vendorsOpen}
+        onClose={() => setVendorsOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Vendors</DialogTitle>
+        <Divider />
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {vm.vendors.data?.length === 0 && (
+              <Typography color="text.secondary">
+                No vendors yet. Add the first one below.
+              </Typography>
+            )}
+            <Stack spacing={1}>
+              {vm.vendors.data?.map((item) => (
+                <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {[item.email, item.phone].filter(Boolean).join(" · ") ||
+                      "No contact details"}
+                  </Typography>
+                </Paper>
+              ))}
+            </Stack>
+            <Divider />
+            <Typography variant="subtitle2">Add a vendor</Typography>
+            <TextField
+              label="Vendor name"
+              value={newVendor.name}
+              onChange={(e) =>
+                setNewVendor({ ...newVendor, name: e.target.value })
+              }
+            />
+            <TextField
+              label="Email (optional)"
+              value={newVendor.email}
+              onChange={(e) =>
+                setNewVendor({ ...newVendor, email: e.target.value })
+              }
+            />
+            <TextField
+              label="Phone (optional)"
+              value={newVendor.phone}
+              onChange={(e) =>
+                setNewVendor({ ...newVendor, phone: e.target.value })
+              }
+            />
+            <TextField
+              label="Link to account ID (optional)"
+              helperText="The account must already have the Vendor role in this building"
+              value={newVendor.accountId}
+              onChange={(e) =>
+                setNewVendor({ ...newVendor, accountId: e.target.value })
+              }
+            />
+            <Button
+              variant="contained"
+              disabled={vm.busy || !newVendor.name.trim()}
+              onClick={() =>
+                void vm
+                  .createVendor({
+                    name: newVendor.name,
+                    email: newVendor.email || undefined,
+                    phone: newVendor.phone || undefined,
+                    accountId: newVendor.accountId || undefined,
+                  })
+                  .then((ok) => {
+                    if (ok)
+                      setNewVendor({
+                        name: "",
+                        email: "",
+                        phone: "",
+                        accountId: "",
+                      });
+                  })
+              }
+            >
+              Add vendor
+            </Button>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>

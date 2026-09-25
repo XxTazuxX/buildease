@@ -24,7 +24,15 @@ import {
 } from "../model/buildings";
 import { useBuildingConfiguration } from "../viewmodel/useBuildingConfiguration";
 
-const emptyConfiguration: BuildingConfiguration = {
+type ConfigurationForm = Omit<
+  BuildingConfiguration,
+  "lateFeeAmount" | "lateFeeGraceDays"
+> & {
+  lateFeeAmount: string;
+  lateFeeGraceDays: string;
+};
+
+const emptyConfiguration: ConfigurationForm = {
   name: "",
   addressLine1: "",
   addressLine2: "",
@@ -35,6 +43,8 @@ const emptyConfiguration: BuildingConfiguration = {
   timezone: "UTC",
   currency: "USD",
   emergencyContact: "",
+  lateFeeAmount: "",
+  lateFeeGraceDays: "5",
 };
 
 export function BuildingConfigurationPanel({
@@ -51,7 +61,7 @@ export function BuildingConfigurationPanel({
   const [levelOpen, setLevelOpen] = useState(false);
   const [spaceOpen, setSpaceOpen] = useState(false);
   const [configuration, setConfiguration] =
-    useState<BuildingConfiguration>(emptyConfiguration);
+    useState<ConfigurationForm>(emptyConfiguration);
   const [level, setLevel] = useState({ name: "", code: "", sortOrder: 0 });
   const [space, setSpace] = useState({
     name: "",
@@ -79,6 +89,8 @@ export function BuildingConfigurationPanel({
       timezone: p.timezone,
       currency: p.currency,
       emergencyContact: p.emergency_contact ?? "",
+      lateFeeAmount: p.late_fee_amount ?? "",
+      lateFeeGraceDays: String(p.late_fee_grace_days),
     });
   }, [vm.profile.data]);
 
@@ -256,7 +268,7 @@ export function BuildingConfigurationPanel({
               <TextField
                 key={key}
                 label={label}
-                value={configuration[key as keyof BuildingConfiguration]}
+                value={configuration[key as keyof ConfigurationForm]}
                 onChange={(event) =>
                   setConfiguration((current) => ({
                     ...current,
@@ -265,13 +277,50 @@ export function BuildingConfigurationPanel({
                 }
               />
             ))}
+            <Divider />
+            <Typography variant="overline" color="text.secondary">
+              Late fees
+            </Typography>
+            <TextField
+              label="Late fee amount (blank disables late fees)"
+              type="number"
+              value={configuration.lateFeeAmount}
+              onChange={(e) =>
+                setConfiguration({
+                  ...configuration,
+                  lateFeeAmount: e.target.value,
+                })
+              }
+            />
+            <TextField
+              label="Grace period before a late fee applies (days)"
+              type="number"
+              value={configuration.lateFeeGraceDays}
+              onChange={(e) =>
+                setConfiguration({
+                  ...configuration,
+                  lateFeeGraceDays: e.target.value,
+                })
+              }
+            />
             <Button
               variant="contained"
               disabled={vm.busy}
               onClick={() =>
-                void vm.configure(configuration).then((ok) => {
-                  if (ok) setConfigurationOpen(false);
-                })
+                void vm
+                  .configure({
+                    ...configuration,
+                    lateFeeAmount:
+                      configuration.lateFeeAmount === ""
+                        ? null
+                        : Number(configuration.lateFeeAmount),
+                    lateFeeGraceDays: Number(
+                      configuration.lateFeeGraceDays || 0,
+                    ),
+                  })
+                  .then((ok) => {
+                    if (ok) setConfigurationOpen(false);
+                  })
               }
             >
               Save building settings

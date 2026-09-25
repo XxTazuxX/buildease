@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
+import { AnnouncementsPanel } from "@/modules/announcements";
 import { OccupancyPanel } from "@/modules/occupancy";
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 import { roles, type Member, type Role } from "@/modules/admin/model/admin";
@@ -99,7 +100,9 @@ export function PeoplePage({
 }) {
   const auth = useAuth();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "occupancy" ? "occupancy" : "members";
+  const tab = ["occupancy", "announcements"].includes(params.get("tab") ?? "")
+    ? (params.get("tab") as "occupancy" | "announcements")
+    : "members";
   const [page, setPage] = useState(0);
   const [invite, setInvite] = useState(false);
   const [makeOwner, setMakeOwner] = useState(false);
@@ -148,6 +151,7 @@ export function PeoplePage({
             <Tabs value={tab} onChange={(_, value) => selectTab(value)}>
               <Tab value="members" label="Members" />
               <Tab value="occupancy" label="Occupancy" />
+              {canManage && <Tab value="announcements" label="Announcements" />}
             </Tabs>
           </Paper>
           {tab === "occupancy" ? (
@@ -156,6 +160,8 @@ export function PeoplePage({
               building={building}
               members={vm.members.data ?? []}
             />
+          ) : tab === "announcements" && canManage ? (
+            <AnnouncementsPanel org={org} building={building} />
           ) : (
             <>
               {(vm.members.error || action.error) && (

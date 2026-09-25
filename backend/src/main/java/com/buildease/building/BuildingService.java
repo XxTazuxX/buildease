@@ -49,7 +49,7 @@ public class BuildingService {
   public Map<String, Object> building(Actor actor, UUID organization, UUID building) {
     enter(actor, organization, building);
     return db.one(
-        "select id,name,code,address_line1,address_line2,city,region,postal_code,country_code,timezone,currency,emergency_contact from buildings where organization_id=? and id=?",
+        "select id,name,code,address_line1,address_line2,city,region,postal_code,country_code,timezone,currency,emergency_contact,late_fee_amount,late_fee_grace_days from buildings where organization_id=? and id=?",
         organization,
         building);
   }
@@ -67,7 +67,9 @@ public class BuildingService {
       String countryCode,
       String timezone,
       String currency,
-      String emergencyContact) {
+      String emergencyContact,
+      BigDecimal lateFeeAmount,
+      int lateFeeGraceDays) {
     owner(actor, organization, building);
     try {
       ZoneId.of(timezone);
@@ -75,7 +77,7 @@ public class BuildingService {
       throw new ApiException(400, "Unknown timezone");
     }
     db.update(
-        "update buildings set name=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,country_code=?,timezone=?,currency=?,emergency_contact=?,updated_at=now() where organization_id=? and id=?",
+        "update buildings set name=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,country_code=?,timezone=?,currency=?,emergency_contact=?,late_fee_amount=?,late_fee_grace_days=?,updated_at=now() where organization_id=? and id=?",
         name,
         blank(addressLine1),
         blank(addressLine2),
@@ -86,6 +88,8 @@ public class BuildingService {
         timezone,
         upper(currency),
         blank(emergencyContact),
+        lateFeeAmount,
+        lateFeeGraceDays,
         organization,
         building);
     db.audit(actor.id(), organization, "BUILDING_CONFIGURED", building);

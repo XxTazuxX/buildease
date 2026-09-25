@@ -178,6 +178,37 @@ class RentAutomationIT {
   }
 
   @Test
+  void lateFeeIsChargedWhenBuildingConfiguresOneAndGraceDaysHaveElapsed() {
+    Fixture f = organizationWithActiveLease("E", LocalDate.now().minusDays(10));
+    db.update(
+        "update buildings set late_fee_amount=?,late_fee_grace_days=? where id=?",
+        new BigDecimal("50.00"),
+        5,
+        f.building());
+
+    automation.run();
+
+    var detail = leases.lease(f.owner(), f.organization(), f.building(), f.lease());
+    @SuppressWarnings("unchecked")
+    var charges = (java.util.List<java.util.Map<String, Object>>) detail.get("charges");
+    var lateFees = charges.stream().filter(c -> "LATE_FEE".equals(c.get("type"))).toList();
+    assertThat(lateFees).hasSize(1);
+    assertThat((BigDecimal) lateFees.getFirst().get("amount")).isEqualByComparingTo("50.00");
+  }
+
+  @Test
+  void noLateFeeIsChargedWhenTheBuildingHasNotConfiguredOne() {
+    Fixture f = organizationWithActiveLease("F", LocalDate.now().minusDays(10));
+
+    automation.run();
+
+    var detail = leases.lease(f.owner(), f.organization(), f.building(), f.lease());
+    @SuppressWarnings("unchecked")
+    var charges = (java.util.List<java.util.Map<String, Object>>) detail.get("charges");
+    assertThat(charges.stream().filter(c -> "LATE_FEE".equals(c.get("type")))).isEmpty();
+  }
+
+  @Test
   void everyOrganizationWithADueLeaseIsProcessedInTheSameRun() {
     Fixture first = organizationWithActiveLease("D1", LocalDate.now());
     Fixture second = organizationWithActiveLease("D2", LocalDate.now());

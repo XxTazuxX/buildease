@@ -54,8 +54,58 @@ export interface Comment {
   internal: boolean;
   created_at: string;
 }
+export interface HistoryEntry {
+  actor_id: string;
+  from_status: RequestStatus | null;
+  to_status: RequestStatus;
+  reason: string | null;
+  created_at: string;
+}
+export const workOrderStatuses = [
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+export type WorkOrderStatus = (typeof workOrderStatuses)[number];
+export interface WorkOrder {
+  id: string;
+  assigned_account_id: string | null;
+  vendor_id: string | null;
+  status: WorkOrderStatus;
+  estimated_cost: string | null;
+  actual_cost: string | null;
+  currency: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface WorkLog {
+  id: string;
+  work_order_id: string;
+  actor_id: string;
+  note: string;
+  minutes: number | null;
+  created_at: string;
+}
+export interface Photo {
+  id: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+export interface Vendor {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+}
 export interface MaintenanceRequestDetail extends MaintenanceRequest {
   comments: Comment[];
+  history: HistoryEntry[];
+  work_orders: WorkOrder[];
+  work_logs: WorkLog[];
+  photos: Photo[];
 }
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/maintenance`;
@@ -79,14 +129,17 @@ export const maintenanceApi = {
     api<MaintenanceRequestDetail>(`${base(org, building)}/requests/${request}`),
   submit: (org: string, building: string, body: NewMaintenanceRequest) =>
     api<{ id: string }>(`${base(org, building)}/requests`, "POST", body),
-  comment: (org: string, building: string, request: string, body: string) =>
+  comment: (
+    org: string,
+    building: string,
+    request: string,
+    body: string,
+    internal = false,
+  ) =>
     api<{ id: string }>(
       `${base(org, building)}/requests/${request}/comments`,
       "POST",
-      {
-        body,
-        internal: false,
-      },
+      { body, internal },
     ),
   triage: (
     org: string,
@@ -120,6 +173,65 @@ export const maintenanceApi = {
       "POST",
       { contentType: photo.type, sizeBytes: photo.size },
     ),
+  downloadPhoto: (
+    org: string,
+    building: string,
+    request: string,
+    photo: string,
+  ) =>
+    api<{ url: string }>(
+      `${base(org, building)}/requests/${request}/photos/${photo}/download`,
+    ),
+  vendors: (org: string, building: string) =>
+    api<Vendor[]>(`${base(org, building)}/vendors`),
+  createVendor: (
+    org: string,
+    building: string,
+    body: { name: string; email?: string; phone?: string; accountId?: string },
+  ) => api<{ id: string }>(`${base(org, building)}/vendors`, "POST", body),
+  assignStaff: (
+    org: string,
+    building: string,
+    request: string,
+    accountId: string,
+    estimatedCost?: number,
+  ) =>
+    api<{ id: string }>(
+      `${base(org, building)}/requests/${request}/assign-staff`,
+      "POST",
+      { accountId, estimatedCost },
+    ),
+  assignVendor: (
+    org: string,
+    building: string,
+    request: string,
+    vendorId: string,
+    estimatedCost?: number,
+  ) =>
+    api<{ id: string }>(
+      `${base(org, building)}/requests/${request}/assign-vendor`,
+      "POST",
+      { vendorId, estimatedCost },
+    ),
+  addWorkLog: (
+    org: string,
+    building: string,
+    workOrder: string,
+    note: string,
+    minutes?: number,
+  ) =>
+    api<{ id: string }>(
+      `${base(org, building)}/work-orders/${workOrder}/logs`,
+      "POST",
+      { note, minutes },
+    ),
+  updateWorkCosts: (
+    org: string,
+    building: string,
+    workOrder: string,
+    body: { estimatedCost?: number; actualCost?: number },
+  ) =>
+    api(`${base(org, building)}/work-orders/${workOrder}/costs`, "PATCH", body),
 };
 export async function stripPhotoMetadata(file: File) {
   if (

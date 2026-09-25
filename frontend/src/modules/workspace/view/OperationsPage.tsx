@@ -1,7 +1,9 @@
 import { Alert, Paper, Tab, Tabs } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
+import { InspectionsPanel } from "@/modules/inspections";
 import { LeasesPanel } from "@/modules/leases";
 import { MaintenancePanel } from "@/modules/maintenance";
+import { ReportsPanel } from "@/modules/reporting";
 import { PageHeader } from "@/shared/components/Surface";
 
 export function OperationsPage({
@@ -22,9 +24,11 @@ export function OperationsPage({
   const tab =
     requested === "maintenance" && canMaintenance
       ? "maintenance"
-      : canFinance
-        ? "finance"
-        : "maintenance";
+      : requested === "inspections" && canManage
+        ? "inspections"
+        : canFinance
+          ? "finance"
+          : "maintenance";
   const select = (value: string) => {
     const next = new URLSearchParams(params);
     next.set("tab", value);
@@ -53,15 +57,19 @@ export function OperationsPage({
               {canMaintenance && (
                 <Tab value="maintenance" label="Maintenance" />
               )}
+              {canManage && <Tab value="inspections" label="Inspections" />}
             </Tabs>
           </Paper>
           {tab === "finance" && canFinance && (
-            <LeasesPanel
-              org={org}
-              building={building}
-              canManage={canManage}
-              canManageFinance={canFinance}
-            />
+            <>
+              <LeasesPanel
+                org={org}
+                building={building}
+                canManage={canManage}
+                canManageFinance={canFinance}
+              />
+              <ReportsPanel org={org} building={building} />
+            </>
           )}
           {tab === "maintenance" && canMaintenance && (
             <MaintenancePanel
@@ -70,6 +78,9 @@ export function OperationsPage({
               canManage={canManage}
               canReport={canManage}
             />
+          )}
+          {tab === "inspections" && canManage && (
+            <InspectionsPanel org={org} building={building} />
           )}
         </>
       )}

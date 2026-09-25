@@ -22,6 +22,13 @@ vi.mock("../model/maintenance", async (importOriginal) => {
       createCategory: vi.fn().mockResolvedValue(undefined),
       updateCategory: vi.fn().mockResolvedValue(undefined),
       preparePhoto: vi.fn(),
+      vendors: vi.fn().mockResolvedValue([]),
+      createVendor: vi.fn().mockResolvedValue(undefined),
+      assignStaff: vi.fn().mockResolvedValue(undefined),
+      assignVendor: vi.fn().mockResolvedValue(undefined),
+      addWorkLog: vi.fn().mockResolvedValue(undefined),
+      updateWorkCosts: vi.fn().mockResolvedValue(undefined),
+      downloadPhoto: vi.fn(),
     },
     stripPhotoMetadata: vi.fn(),
   };
@@ -178,6 +185,10 @@ it("useRequestDetail fetches the request and invalidates it after commenting", a
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     comments: [],
+    history: [],
+    work_orders: [],
+    work_logs: [],
+    photos: [],
   });
   const { result } = renderHook(
     () => useRequestDetail("org", "building", "req-1"),
@@ -193,6 +204,90 @@ it("useRequestDetail fetches the request and invalidates it after commenting", a
     "building",
     "req-1",
     "Any update?",
+    false,
   );
   expect(invalidate).toHaveBeenCalled();
+});
+
+it("useMaintenance assigns staff and vendors, and can create a vendor", async () => {
+  const { result } = renderHook(() => useMaintenance("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.assignStaff("req-1", "account-1", 50);
+  });
+  expect(maintenanceApi.assignStaff).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "req-1",
+    "account-1",
+    50,
+  );
+
+  await act(async () => {
+    await result.current.assignVendor("req-1", "vendor-1", 75);
+  });
+  expect(maintenanceApi.assignVendor).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "req-1",
+    "vendor-1",
+    75,
+  );
+
+  await act(async () => {
+    await result.current.createVendor({ name: "Acme Plumbing" });
+  });
+  expect(maintenanceApi.createVendor).toHaveBeenCalledWith("org", "building", {
+    name: "Acme Plumbing",
+  });
+});
+
+it("useRequestDetail adds a work log and updates work costs", async () => {
+  vi.mocked(maintenanceApi.detail).mockResolvedValue({
+    id: "req-1",
+    space_id: "space-1",
+    category_id: "cat-1",
+    title: "Leaking tap",
+    impact: "MEDIUM",
+    danger: false,
+    suggested_priority: "MEDIUM",
+    priority: "MEDIUM",
+    status: "IN_PROGRESS",
+    response_due_at: null,
+    resolution_due_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    comments: [],
+    history: [],
+    work_orders: [],
+    work_logs: [],
+    photos: [],
+  });
+  const { result } = renderHook(
+    () => useRequestDetail("org", "building", "req-1"),
+    { wrapper },
+  );
+  await waitFor(() => expect(result.current.query.data?.id).toBe("req-1"));
+
+  await act(async () => {
+    await result.current.addWorkLog("work-1", "Replaced washer", 30);
+  });
+  expect(maintenanceApi.addWorkLog).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "work-1",
+    "Replaced washer",
+    30,
+  );
+
+  await act(async () => {
+    await result.current.updateWorkCosts("work-1", { actualCost: 45 });
+  });
+  expect(maintenanceApi.updateWorkCosts).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "work-1",
+    { actualCost: 45 },
+  );
 });

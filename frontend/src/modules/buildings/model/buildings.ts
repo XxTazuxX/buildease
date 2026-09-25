@@ -33,6 +33,8 @@ export interface BuildingProfile {
   timezone: string;
   currency: string;
   emergency_contact: string | null;
+  late_fee_amount: string | null;
+  late_fee_grace_days: number;
 }
 export interface BuildingLevel {
   id: string;
@@ -66,6 +68,8 @@ export const configurationSchema = z.object({
   timezone: z.string().trim().min(1).max(64),
   currency: z.string().trim().length(3),
   emergencyContact: z.string().trim().max(160),
+  lateFeeAmount: z.coerce.number().nonnegative().nullable(),
+  lateFeeGraceDays: z.coerce.number().int().min(0).max(90),
 });
 export type BuildingConfiguration = z.infer<typeof configurationSchema>;
 

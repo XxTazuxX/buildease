@@ -26,7 +26,9 @@ public class BuildingController {
       @Pattern(regexp = "[A-Za-z]{2}") String countryCode,
       @NotBlank @Size(max = 64) String timezone,
       @NotBlank @Pattern(regexp = "[A-Za-z]{3}") String currency,
-      @Size(max = 160) String emergencyContact) {}
+      @Size(max = 160) String emergencyContact,
+      @DecimalMin("0.00") @Digits(integer = 12, fraction = 2) BigDecimal lateFeeAmount,
+      @Min(0) @Max(90) int lateFeeGraceDays) {}
 
   public record Level(
       @NotBlank @Size(max = 120) String name,
@@ -71,7 +73,9 @@ public class BuildingController {
         body.countryCode(),
         body.timezone(),
         body.currency(),
-        body.emergencyContact());
+        body.emergencyContact(),
+        body.lateFeeAmount(),
+        body.lateFeeGraceDays());
   }
 
   @GetMapping("/levels")
