@@ -825,6 +825,7 @@ export default function App() {
                       <OperationsPage
                         org={activeOrg}
                         building={building}
+                        owner={!!access?.owner}
                         canManage={canManage}
                         canFinance={canFinance}
                         canMaintenance={canMaintenance}

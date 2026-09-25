@@ -80,7 +80,8 @@ public class SecurityConfig {
                         "/api/auth/verify",
                         "/api/auth/forgot-password",
                         "/api/auth/reset-password",
-                        "/api/impersonation/refresh")
+                        "/api/impersonation/refresh",
+                        "/api/public/v1/**")
                     .permitAll()
                     .requestMatchers("/api/**")
                     .authenticated()

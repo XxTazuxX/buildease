@@ -135,3 +135,54 @@ it("renews CSRF after authentication clears the old cookie", async () => {
   });
   expect(fetch.mock.calls[3][1].headers["X-XSRF-TOKEN"]).toBe("after");
 });
+it("downloadFile attaches the bearer token and triggers a browser download", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "csrf" })))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accessToken: "memory-only",
+          mustChangePassword: false,
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(new Blob(["a,b\n1,2"], { type: "text/csv" })),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const createObjectURL = vi
+    .fn()
+    .mockReturnValue("blob:mock-url") as typeof URL.createObjectURL;
+  const revokeObjectURL = vi.fn() as typeof URL.revokeObjectURL;
+  URL.createObjectURL = createObjectURL;
+  URL.revokeObjectURL = revokeObjectURL;
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  const client = await import("./client");
+  await client.refresh();
+  await client.downloadFile("/reports/rent-roll/export", "rent-roll.csv");
+  expect(fetch.mock.calls[2][1].headers.Authorization).toBe(
+    "Bearer memory-only",
+  );
+  expect(createObjectURL).toHaveBeenCalled();
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+  click.mockRestore();
+});
+it("downloadFile throws an ApiError on a failed response without downloading", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const createObjectURL = vi.fn() as typeof URL.createObjectURL;
+  URL.createObjectURL = createObjectURL;
+  URL.revokeObjectURL = vi.fn();
+  const client = await import("./client");
+  await expect(
+    client.downloadFile("/reports/rent-roll/export", "rent-roll.csv"),
+  ).rejects.toThrow("Forbidden");
+  expect(createObjectURL).not.toHaveBeenCalled();
+});

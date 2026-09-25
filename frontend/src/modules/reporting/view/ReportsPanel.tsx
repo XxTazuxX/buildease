@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Alert,
   Box,
+  Button,
   MenuItem,
   Paper,
   Stack,
@@ -14,7 +15,10 @@ import {
   useIncomeStatement,
   useLeasesForStatement,
   useLeaseStatement,
+  useMaintenanceReport,
+  useOccupancyReport,
   useRentRoll,
+  useReportExports,
 } from "../viewmodel/useReporting";
 
 function todayIso() {
@@ -34,31 +38,39 @@ export function ReportsPanel({
   org: string;
   building: string;
 }) {
-  const [tab, setTab] = useState<"rent-roll" | "income" | "statement">(
-    "rent-roll",
-  );
+  const [tab, setTab] = useState<
+    "rent-roll" | "income" | "statement" | "occupancy" | "maintenance"
+  >("rent-roll");
   return (
     <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
       <Typography variant="overline" color="primary.main">
         Reports
       </Typography>
-      <Typography variant="h5">Financial reports</Typography>
+      <Typography variant="h5">Financial &amp; operational reports</Typography>
       <Typography color="text.secondary">
-        Rent roll, income summary, and per-lease statements for this building.
+        Rent roll, income summary, lease statements, occupancy, and maintenance
+        analytics for this building.
       </Typography>
       <Tabs
         value={tab}
         onChange={(_, value) => setTab(value)}
         sx={{ mt: 2, mb: 2 }}
+        variant="scrollable"
       >
         <Tab value="rent-roll" label="Rent roll" />
         <Tab value="income" label="Income statement" />
         <Tab value="statement" label="Lease statement" />
+        <Tab value="occupancy" label="Occupancy" />
+        <Tab value="maintenance" label="Maintenance" />
       </Tabs>
       {tab === "rent-roll" && <RentRollTab org={org} building={building} />}
       {tab === "income" && <IncomeStatementTab org={org} building={building} />}
       {tab === "statement" && (
         <LeaseStatementTab org={org} building={building} />
+      )}
+      {tab === "occupancy" && <OccupancyTab org={org} building={building} />}
+      {tab === "maintenance" && (
+        <MaintenanceReportTab org={org} building={building} />
       )}
     </Paper>
   );
@@ -66,9 +78,21 @@ export function ReportsPanel({
 
 function RentRollTab({ org, building }: { org: string; building: string }) {
   const query = useRentRoll(org, building);
+  const exports = useReportExports(org, building);
   return (
     <Stack spacing={1}>
-      {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {(query.error || exports.error) && (
+        <Alert severity="error">{query.error?.message || exports.error}</Alert>
+      )}
+      <Box>
+        <Button
+          size="small"
+          disabled={exports.busy}
+          onClick={() => void exports.exportRentRoll()}
+        >
+          Export CSV
+        </Button>
+      </Box>
       {query.data?.length === 0 && (
         <Typography color="text.secondary">
           No active leases in this building.
@@ -117,6 +141,7 @@ function IncomeStatementTab({
   const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
   const query = useIncomeStatement(org, building, from, to);
+  const exports = useReportExports(org, building);
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -134,8 +159,16 @@ function IncomeStatementTab({
           value={to}
           onChange={(e) => setTo(e.target.value)}
         />
+        <Button
+          disabled={exports.busy}
+          onClick={() => void exports.exportIncomeStatement(from, to)}
+        >
+          Export CSV
+        </Button>
       </Stack>
-      {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {(query.error || exports.error) && (
+        <Alert severity="error">{query.error?.message || exports.error}</Alert>
+      )}
       {query.data && (
         <Stack spacing={1}>
           <Typography variant="body1">
@@ -229,6 +262,98 @@ function LeaseStatementTab({
           <Typography variant="h6">
             Closing balance: {query.data.closingBalance}
           </Typography>
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
+function OccupancyTab({ org, building }: { org: string; building: string }) {
+  const query = useOccupancyReport(org, building);
+  return (
+    <Stack spacing={1.5}>
+      {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {query.data && (
+        <>
+          <Typography variant="h6">
+            Occupancy rate: {query.data.occupancyRate}%
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {query.data.totalRentable} rentable spaces
+            {query.data.averageTenancyDays !== null
+              ? ` · Average tenancy ${query.data.averageTenancyDays} days`
+              : ""}
+          </Typography>
+          {Object.entries(query.data.byStatus).map(([status, count]) => (
+            <Stack
+              key={status}
+              direction="row"
+              sx={{ justifyContent: "space-between", maxWidth: 320 }}
+            >
+              <Typography variant="body2">{status}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {count}
+              </Typography>
+            </Stack>
+          ))}
+        </>
+      )}
+    </Stack>
+  );
+}
+
+function MaintenanceReportTab({
+  org,
+  building,
+}: {
+  org: string;
+  building: string;
+}) {
+  const [from, setFrom] = useState(firstOfMonthIso());
+  const [to, setTo] = useState(todayIso());
+  const query = useMaintenanceReport(org, building, from, to);
+  return (
+    <Stack spacing={2}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <TextField
+          label="From"
+          type="date"
+          slotProps={{ inputLabel: { shrink: true } }}
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <TextField
+          label="To"
+          type="date"
+          slotProps={{ inputLabel: { shrink: true } }}
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+        />
+      </Stack>
+      {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {query.data && (
+        <Stack spacing={1}>
+          <Typography variant="body1">
+            SLA compliance: {query.data.slaComplianceRate}%
+          </Typography>
+          <Typography variant="body1">
+            Average resolution time:{" "}
+            {query.data.averageResolutionHours !== null
+              ? `${query.data.averageResolutionHours} hours`
+              : "No resolved requests in range"}
+          </Typography>
+          {query.data.byStatus.map((row) => (
+            <Stack
+              key={row.status}
+              direction="row"
+              sx={{ justifyContent: "space-between", maxWidth: 320 }}
+            >
+              <Typography variant="body2">{row.status}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {row.count}
+              </Typography>
+            </Stack>
+          ))}
         </Stack>
       )}
     </Stack>

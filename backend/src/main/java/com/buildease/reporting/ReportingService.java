@@ -185,6 +185,141 @@ public class ReportingService {
     return result;
   }
 
+  public Map<String, Object> occupancyReport(Actor actor, UUID organization, UUID building) {
+    financeReader(actor, organization, building);
+    Map<String, Long> byStatus = new LinkedHashMap<>();
+    for (String status : List.of("VACANT", "RESERVED", "OCCUPIED", "MAINTENANCE", "INACTIVE"))
+      byStatus.put(status, 0L);
+    for (var row :
+        db.rows(
+            "select status,count(*) as count from spaces where organization_id=? and building_id=? and rentable group by status",
+            organization,
+            building))
+      byStatus.put((String) row.get("status"), ((Number) row.get("count")).longValue());
+    long totalRentable = byStatus.values().stream().mapToLong(Long::longValue).sum();
+    long occupied = byStatus.get("OCCUPIED");
+    double occupancyRate = totalRentable == 0 ? 0 : (occupied * 100.0) / totalRentable;
+    Number avgTenancyDays =
+        (Number)
+            db.one(
+                    "select avg(current_date-starts_on) as value from space_assignments where organization_id=? and building_id=? and status='ACTIVE'",
+                    organization,
+                    building)
+                .get("value");
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("byStatus", byStatus);
+    result.put("totalRentable", totalRentable);
+    result.put("occupancyRate", Math.round(occupancyRate * 100) / 100.0);
+    result.put("averageTenancyDays", avgTenancyDays == null ? null : avgTenancyDays.intValue());
+    return result;
+  }
+
+  public Map<String, Object> maintenanceReport(
+      Actor actor, UUID organization, UUID building, LocalDate from, LocalDate to) {
+    financeReader(actor, organization, building);
+    if (to.isBefore(from)) throw new ApiException(400, "'to' cannot be before 'from'");
+    var byStatus =
+        db.rows(
+            "select status,count(*) as count from maintenance_requests where organization_id=? and building_id=? and created_at::date between ? and ? group by status",
+            organization,
+            building,
+            from,
+            to);
+    Number avgResolutionHours =
+        (Number)
+            db.one(
+                    "select avg(extract(epoch from resolved_at-created_at)/3600) as value from maintenance_requests where organization_id=? and building_id=? and resolved_at is not null and created_at::date between ? and ?",
+                    organization,
+                    building,
+                    from,
+                    to)
+                .get("value");
+    long slaTotal =
+        ((Number)
+                db.one(
+                        "select count(*) as value from maintenance_requests where organization_id=? and building_id=? and resolved_at is not null and created_at::date between ? and ?",
+                        organization,
+                        building,
+                        from,
+                        to)
+                    .get("value"))
+            .longValue();
+    long slaMet =
+        ((Number)
+                db.one(
+                        "select count(*) as value from maintenance_requests where organization_id=? and building_id=? and resolved_at is not null and resolved_at<=resolution_due_at and created_at::date between ? and ?",
+                        organization,
+                        building,
+                        from,
+                        to)
+                    .get("value"))
+            .longValue();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("from", from);
+    result.put("to", to);
+    result.put("byStatus", byStatus);
+    result.put(
+        "averageResolutionHours",
+        avgResolutionHours == null
+            ? null
+            : Math.round(avgResolutionHours.doubleValue() * 10) / 10.0);
+    double slaRate = slaTotal == 0 ? 0 : (slaMet * 100.0) / slaTotal;
+    result.put("slaComplianceRate", Math.round(slaRate * 100) / 100.0);
+    return result;
+  }
+
+  public String rentRollCsv(Actor actor, UUID organization, UUID building) {
+    var rows = rentRoll(actor, organization, building);
+    StringBuilder csv =
+        new StringBuilder(
+            "Resident,Space,Rent,Currency,Next Due,Charged,Paid,Balance,Deposit Status,Deposit Amount\n");
+    for (var row : rows)
+      csv.append(
+          csvRow(
+              row.get("resident_name"),
+              row.get("space_name") + " (" + row.get("space_code") + ")",
+              row.get("rent_amount"),
+              row.get("currency"),
+              row.get("next_charge_on"),
+              row.get("charged"),
+              row.get("paid"),
+              row.get("balance"),
+              row.get("deposit_status"),
+              row.get("deposit_amount")));
+    return csv.toString();
+  }
+
+  public String incomeStatementCsv(
+      Actor actor, UUID organization, UUID building, LocalDate from, LocalDate to) {
+    var statement = incomeStatement(actor, organization, building, from, to);
+    StringBuilder csv =
+        new StringBuilder("From,To,Total Charged,Total Collected,Outstanding Balance\n");
+    csv.append(
+        csvRow(
+            statement.get("from"),
+            statement.get("to"),
+            statement.get("totalCharged"),
+            statement.get("totalCollected"),
+            statement.get("outstandingBalance")));
+    return csv.toString();
+  }
+
+  private String csvRow(Object... values) {
+    StringBuilder row = new StringBuilder();
+    for (int i = 0; i < values.length; i++) {
+      if (i > 0) row.append(',');
+      row.append(csvField(values[i]));
+    }
+    return row.append('\n').toString();
+  }
+
+  private String csvField(Object value) {
+    String text = value == null ? "" : value.toString();
+    if (text.contains(",") || text.contains("\"") || text.contains("\n"))
+      return "\"" + text.replace("\"", "\"\"") + "\"";
+    return text;
+  }
+
   private void requireLeaseAccess(Actor actor, Access access, Map<String, Object> lease) {
     if (access.manager() || access.roles().contains("ACCOUNTANT")) return;
     if (access.roles().contains("TENANT")

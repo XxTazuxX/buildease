@@ -161,6 +161,33 @@ export function publicApi<T>(path: string, method = "GET", body?: unknown) {
   return request<T>(path, method, body, false);
 }
 
+export async function downloadFile(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const token = impersonationAccessToken ?? accessToken;
+  const headers: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+  const response = await fetch(`/api${path}`, {
+    headers,
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    const data = (await response
+      .json()
+      .catch(() => ({ message: "Request failed" }))) as { message?: string };
+    throw new ApiError(response.status, data.message || "Request failed");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function login(email: string, password: string) {
   const tokens = await request<Tokens>(
     "/auth/login",

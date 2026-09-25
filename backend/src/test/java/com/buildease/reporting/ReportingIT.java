@@ -7,6 +7,8 @@ import com.buildease.building.*;
 import com.buildease.common.ApiException;
 import com.buildease.common.Store;
 import com.buildease.leasing.LeaseService;
+import com.buildease.maintenance.Impact;
+import com.buildease.maintenance.MaintenanceService;
 import com.buildease.occupancy.OccupancyService;
 import com.buildease.security.Role;
 import com.buildease.tenancy.TenantService;
@@ -64,6 +66,7 @@ class ReportingIT {
   @Autowired BuildingService buildings;
   @Autowired OccupancyService occupancy;
   @Autowired LeaseService leases;
+  @Autowired MaintenanceService maintenance;
   @Autowired ReportingService reporting;
   @Autowired PasswordEncoder passwords;
   @Autowired JwtDecoder decoder;
@@ -266,5 +269,74 @@ class ReportingIT {
                     LocalDate.now().minusMonths(1),
                     LocalDate.now()))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+  }
+
+  @Test
+  void occupancyReportCountsSpacesByStatusAndComputesTheOccupancyRate() {
+    Setup s = organizationWithRentableSpaceAndResident();
+    activeLease(s, LocalDate.now());
+    buildings.createSpace(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        null,
+        null,
+        "Flat 2",
+        "F2",
+        SpaceType.FLAT,
+        true,
+        null,
+        4,
+        null);
+
+    var report = reporting.occupancyReport(s.owner(), s.organization(), s.building());
+
+    @SuppressWarnings("unchecked")
+    var byStatus = (java.util.Map<String, Long>) report.get("byStatus");
+    assertThat(byStatus.get("OCCUPIED")).isEqualTo(1L);
+    assertThat(byStatus.get("VACANT")).isEqualTo(1L);
+    assertThat(report).containsEntry("totalRentable", 2L).containsEntry("occupancyRate", 50.0);
+  }
+
+  @Test
+  void maintenanceReportCountsRequestsByStatusWithinTheDateRange() {
+    Setup s = organizationWithRentableSpaceAndResident();
+    UUID category =
+        maintenance.createCategory(s.owner(), s.organization(), s.building(), "Plumbing", 4, 48);
+    maintenance.submit(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.space(),
+        category,
+        "Leaking tap",
+        "Water is dripping",
+        Impact.MEDIUM,
+        false);
+
+    var report =
+        reporting.maintenanceReport(
+            s.owner(), s.organization(), s.building(), LocalDate.now(), LocalDate.now());
+
+    @SuppressWarnings("unchecked")
+    var byStatus = (java.util.List<java.util.Map<String, Object>>) report.get("byStatus");
+    assertThat(byStatus)
+        .anySatisfy(
+            row -> {
+              assertThat(row.get("status")).isEqualTo("SUBMITTED");
+              assertThat(((Number) row.get("count")).longValue()).isEqualTo(1L);
+            });
+  }
+
+  @Test
+  void rentRollCsvIncludesAHeaderAndOneRowPerActiveLease() {
+    Setup s = organizationWithRentableSpaceAndResident();
+    activeLease(s, LocalDate.now());
+
+    String csv = reporting.rentRollCsv(s.owner(), s.organization(), s.building());
+
+    assertThat(csv).startsWith("Resident,Space,Rent,Currency,Next Due");
+    assertThat(csv).contains("Resident");
+    assertThat(csv.lines().count()).isEqualTo(2);
   }
 }

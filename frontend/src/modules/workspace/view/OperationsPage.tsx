@@ -1,5 +1,7 @@
 import { Alert, Paper, Tab, Tabs } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
+import { AssetsPanel } from "@/modules/assets";
+import { AccountingSyncPanel, ApiKeysPanel } from "@/modules/integrations";
 import { InspectionsPanel } from "@/modules/inspections";
 import { LeasesPanel } from "@/modules/leases";
 import { MaintenancePanel } from "@/modules/maintenance";
@@ -9,12 +11,14 @@ import { PageHeader } from "@/shared/components/Surface";
 export function OperationsPage({
   org,
   building,
+  owner,
   canManage,
   canFinance,
   canMaintenance,
 }: {
   org: string;
   building: string;
+  owner: boolean;
   canManage: boolean;
   canFinance: boolean;
   canMaintenance: boolean;
@@ -26,9 +30,11 @@ export function OperationsPage({
       ? "maintenance"
       : requested === "inspections" && canManage
         ? "inspections"
-        : canFinance
-          ? "finance"
-          : "maintenance";
+        : requested === "assets" && canManage
+          ? "assets"
+          : canFinance
+            ? "finance"
+            : "maintenance";
   const select = (value: string) => {
     const next = new URLSearchParams(params);
     next.set("tab", value);
@@ -58,6 +64,7 @@ export function OperationsPage({
                 <Tab value="maintenance" label="Maintenance" />
               )}
               {canManage && <Tab value="inspections" label="Inspections" />}
+              {canManage && <Tab value="assets" label="Assets" />}
             </Tabs>
           </Paper>
           {tab === "finance" && canFinance && (
@@ -69,6 +76,10 @@ export function OperationsPage({
                 canManageFinance={canFinance}
               />
               <ReportsPanel org={org} building={building} />
+              {canManage && (
+                <AccountingSyncPanel org={org} building={building} />
+              )}
+              {owner && <ApiKeysPanel org={org} />}
             </>
           )}
           {tab === "maintenance" && canMaintenance && (
@@ -81,6 +92,9 @@ export function OperationsPage({
           )}
           {tab === "inspections" && canManage && (
             <InspectionsPanel org={org} building={building} />
+          )}
+          {tab === "assets" && canManage && (
+            <AssetsPanel org={org} building={building} />
           )}
         </>
       )}

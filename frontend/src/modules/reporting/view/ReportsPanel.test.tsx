@@ -6,7 +6,10 @@ import {
   useIncomeStatement,
   useLeasesForStatement,
   useLeaseStatement,
+  useMaintenanceReport,
+  useOccupancyReport,
   useRentRoll,
+  useReportExports,
 } from "../viewmodel/useReporting";
 
 vi.mock("../viewmodel/useReporting", () => ({
@@ -14,6 +17,9 @@ vi.mock("../viewmodel/useReporting", () => ({
   useIncomeStatement: vi.fn(),
   useLeasesForStatement: vi.fn(),
   useLeaseStatement: vi.fn(),
+  useOccupancyReport: vi.fn(),
+  useMaintenanceReport: vi.fn(),
+  useReportExports: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -62,6 +68,23 @@ beforeEach(() => {
     error: null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
+  vi.mocked(useOccupancyReport).mockReturnValue({
+    data: undefined,
+    error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  vi.mocked(useMaintenanceReport).mockReturnValue({
+    data: undefined,
+    error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  vi.mocked(useReportExports).mockReturnValue({
+    busy: false,
+    error: "",
+    exportRentRoll: vi.fn(),
+    exportIncomeStatement: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
 });
 
 it("shows the rent roll by default", () => {
@@ -88,4 +111,59 @@ it("prompts to select a lease on the statement tab before fetching", async () =>
   expect(
     screen.getByText("Select a lease to view its statement."),
   ).toBeInTheDocument();
+});
+
+it("shows the occupancy report", async () => {
+  vi.mocked(useOccupancyReport).mockReturnValue({
+    data: {
+      byStatus: { VACANT: 1, OCCUPIED: 1 },
+      totalRentable: 2,
+      occupancyRate: 50,
+      averageTenancyDays: 30,
+    },
+    error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ReportsPanel org="org" building="building" />);
+  await userEvent.setup().click(screen.getByRole("tab", { name: "Occupancy" }));
+  expect(screen.getByText("Occupancy rate: 50%")).toBeInTheDocument();
+  expect(screen.getByText(/Average tenancy 30 days/)).toBeInTheDocument();
+});
+
+it("shows the maintenance analytics report", async () => {
+  vi.mocked(useMaintenanceReport).mockReturnValue({
+    data: {
+      from: "2026-01-01",
+      to: "2026-01-31",
+      byStatus: [{ status: "SUBMITTED", count: 3 }],
+      averageResolutionHours: 5.5,
+      slaComplianceRate: 90,
+    },
+    error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ReportsPanel org="org" building="building" />);
+  await userEvent
+    .setup()
+    .click(screen.getByRole("tab", { name: "Maintenance" }));
+  expect(screen.getByText("SLA compliance: 90%")).toBeInTheDocument();
+  expect(
+    screen.getByText("Average resolution time: 5.5 hours"),
+  ).toBeInTheDocument();
+});
+
+it("exports the rent roll to CSV", async () => {
+  const exportRentRoll = vi.fn();
+  vi.mocked(useReportExports).mockReturnValue({
+    busy: false,
+    error: "",
+    exportRentRoll,
+    exportIncomeStatement: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ReportsPanel org="org" building="building" />);
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Export CSV" }));
+  expect(exportRentRoll).toHaveBeenCalled();
 });
