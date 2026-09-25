@@ -76,6 +76,8 @@ export function useLeases(org: string, building: string) {
     ) => run(() => leasesApi.refundDeposit(org, building, lease, body)),
     forfeitDeposit: (lease: string, reason: string) =>
       run(() => leasesApi.forfeitDeposit(org, building, lease, reason)),
+    payOnline: (lease: string, amount: number) =>
+      run(() => leasesApi.payOnline(org, building, lease, amount)),
   };
 }
 

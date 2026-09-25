@@ -20,6 +20,7 @@ vi.mock("../model/leases", async (importOriginal) => {
       recordDeposit: vi.fn(),
       refundDeposit: vi.fn().mockResolvedValue(undefined),
       forfeitDeposit: vi.fn().mockResolvedValue(undefined),
+      payOnline: vi.fn(),
     },
   };
 });
@@ -144,6 +145,24 @@ it("records a payment and a deposit with the given details", async () => {
       heldOn: "2026-01-01",
     },
   );
+});
+
+it("pays online and invalidates the shared query key on success", async () => {
+  vi.mocked(leasesApi.payOnline).mockResolvedValue({ id: "payment-1" });
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useLeases("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.payOnline("lease-1", 500);
+  });
+  expect(leasesApi.payOnline).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "lease-1",
+    500,
+  );
+  expect(invalidate).toHaveBeenCalled();
 });
 
 it("surfaces the server error and does not invalidate when recording a payment is forbidden", async () => {

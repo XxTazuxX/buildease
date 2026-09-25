@@ -167,7 +167,7 @@ public class ReportingService {
             from,
             to)
         .forEach(lines::add);
-    lines.sort(Comparator.comparing(l -> (LocalDate) l.get("date")));
+    lines.sort(Comparator.comparing(l -> (java.sql.Date) l.get("date")));
 
     BigDecimal running = openingBalance;
     for (var line : lines) {

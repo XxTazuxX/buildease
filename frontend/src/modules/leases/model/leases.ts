@@ -135,4 +135,8 @@ export const leasesApi = {
     reason: string,
   ) =>
     api(`${base(org, building)}/${lease}/deposit/forfeit`, "POST", { reason }),
+  payOnline: (org: string, building: string, lease: string, amount: number) =>
+    api<{ id: string }>(`${base(org, building)}/${lease}/pay`, "POST", {
+      amount,
+    }),
 };

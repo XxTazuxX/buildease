@@ -8,6 +8,12 @@ vi.mock("../viewmodel/useLeases", () => ({
   useLeases: vi.fn(),
   useLeaseDetail: vi.fn(),
 }));
+vi.mock("@/modules/auth/viewmodel/AuthProvider", () => ({
+  useAuth: () => ({ profile: { display_name: "Owner Name" } }),
+}));
+vi.mock("@/modules/signing", () => ({
+  SignaturePanel: () => <div>Signatures</div>,
+}));
 
 const resident = {
   id: "resident-1",

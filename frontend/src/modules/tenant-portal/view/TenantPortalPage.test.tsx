@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
@@ -30,6 +31,12 @@ vi.mock("@/modules/maintenance/viewmodel/useMaintenance", () => ({
   useMaintenance: vi.fn(),
   useRequestDetail: vi.fn(),
 }));
+vi.mock("@/modules/auth/viewmodel/AuthProvider", () => ({
+  useAuth: () => ({ profile: { display_name: "Alex Resident" } }),
+}));
+vi.mock("@/modules/signing", () => ({
+  SignaturePanel: () => <div>Signatures</div>,
+}));
 
 const buildings = [{ id: "b1", name: "Riverside", code: "RS" }];
 const lease = {
@@ -42,12 +49,17 @@ const lease = {
 };
 
 let query: QueryClient;
+let payOnline: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
   query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  payOnline = vi.fn().mockResolvedValue(true);
   vi.mocked(adminApi.buildings).mockResolvedValue(buildings);
   vi.mocked(useLeases).mockReturnValue({
     leases: { data: [lease] },
+    busy: false,
+    error: "",
+    payOnline,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
   vi.mocked(useLeaseDetail).mockReturnValue({
@@ -119,4 +131,15 @@ it("shows a building selector when the tenant has more than one building", async
   ]);
   render(<TenantPortalPage org="org" />, { wrapper });
   expect(await screen.findByLabelText("Building")).toBeInTheDocument();
+});
+
+it("lets the resident pay their outstanding balance online", async () => {
+  render(<TenantPortalPage org="org" />, { wrapper });
+  await screen.findByText("Flat 1 · F1");
+  const amount = screen.getByLabelText("Amount") as HTMLInputElement;
+  expect(amount.value).toBe("250.00");
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Pay now" }));
+  expect(payOnline).toHaveBeenCalledWith("lease-1", 250);
 });

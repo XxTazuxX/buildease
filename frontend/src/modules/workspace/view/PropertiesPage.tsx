@@ -9,6 +9,8 @@ import {
   Typography,
 } from "@mui/material";
 import { BuildingConfigurationPanel } from "@/modules/buildings";
+import { ProspectsPanel } from "@/modules/crm";
+import { ListingsPanel } from "@/modules/marketing";
 import { useAdminCommands } from "@/modules/admin/viewmodel/useAdmin";
 import { FieldsForm } from "@/shared/components/FieldsForm";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
@@ -40,11 +42,15 @@ export function PropertiesPage({
         }
       />
       {building ? (
-        <BuildingConfigurationPanel
-          org={org}
-          building={building}
-          owner={owner}
-        />
+        <>
+          <BuildingConfigurationPanel
+            org={org}
+            building={building}
+            owner={owner}
+          />
+          {owner && <ListingsPanel org={org} building={building} />}
+          {owner && <ProspectsPanel org={org} building={building} />}
+        </>
       ) : (
         <Paper sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h5">No buildings available</Typography>

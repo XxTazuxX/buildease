@@ -14,6 +14,8 @@ import {
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
+import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
+import { SignaturePanel } from "@/modules/signing";
 import {
   leaseEndReasons,
   paymentMethods,
@@ -323,6 +325,7 @@ export function LeasesPanel({
           org={org}
           building={building}
           lease={detailLease}
+          canManage={canManage}
           canManageFinance={canManageFinance}
           onClose={() => setDetailLease(null)}
         />
@@ -335,15 +338,18 @@ function LeaseDetailDialog({
   org,
   building,
   lease,
+  canManage,
   canManageFinance,
   onClose,
 }: {
   org: string;
   building: string;
   lease: string;
+  canManage: boolean;
   canManageFinance: boolean;
   onClose: () => void;
 }) {
+  const auth = useAuth();
   const detail = useLeaseDetail(org, building, lease);
   const vm = useLeases(org, building);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -542,6 +548,15 @@ function LeaseDetailDialog({
                 )}
               </Stack>
             )}
+            <Divider />
+            <SignaturePanel
+              org={org}
+              building={building}
+              lease={lease}
+              role="OWNER"
+              defaultName={auth.profile?.display_name ?? ""}
+              canSign={canManage}
+            />
           </Stack>
         )}
       </DialogContent>

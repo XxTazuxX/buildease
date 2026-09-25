@@ -1,9 +1,19 @@
-import { useMemo } from "react";
-import { Divider, Paper, Stack, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Button,
+  Divider,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import {
   useLeases,
   useLeaseDetail,
 } from "@/modules/leases/viewmodel/useLeases";
+import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
+import { SignaturePanel } from "@/modules/signing";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -23,15 +33,21 @@ export function MyLeasePanel({
   org: string;
   building: string;
 }) {
-  const { leases } = useLeases(org, building);
+  const auth = useAuth();
+  const vm = useLeases(org, building);
   const lease = useMemo(() => {
-    const list = leases.data ?? [];
+    const list = vm.leases.data ?? [];
     return (
       list.find((l) => l.status === "ACTIVE") ??
       [...list].sort((a, b) => b.starts_on.localeCompare(a.starts_on))[0]
     );
-  }, [leases.data]);
+  }, [vm.leases.data]);
   const detail = useLeaseDetail(org, building, lease?.id ?? "");
+  const [payAmount, setPayAmount] = useState("");
+  const balance = detail.data ? Number(detail.data.balance) : 0;
+  useEffect(() => {
+    if (balance > 0) setPayAmount(balance.toFixed(2));
+  }, [balance]);
   return (
     <Paper sx={{ p: { xs: 2, sm: 2.5 }, mb: 3 }}>
       <Typography variant="overline" color="primary.main">
@@ -103,6 +119,32 @@ export function MyLeasePanel({
               ))}
             </Stack>
           )}
+          {lease.status === "ACTIVE" && balance > 0 && (
+            <>
+              <Divider />
+              <Typography variant="subtitle2">Pay rent online</Typography>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <TextField
+                  size="small"
+                  label="Amount"
+                  type="number"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                />
+                <Button
+                  variant="contained"
+                  disabled={vm.busy || !payAmount || Number(payAmount) <= 0}
+                  onClick={() => void vm.payOnline(lease.id, Number(payAmount))}
+                >
+                  Pay now
+                </Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Processed through a sandbox test payment gateway.
+              </Typography>
+            </>
+          )}
           {detail.data?.deposit && (
             <>
               <Divider />
@@ -113,6 +155,14 @@ export function MyLeasePanel({
               </Typography>
             </>
           )}
+          <Divider />
+          <SignaturePanel
+            org={org}
+            building={building}
+            lease={lease.id}
+            role="RESIDENT"
+            defaultName={auth.profile?.display_name ?? ""}
+          />
         </Stack>
       )}
     </Paper>

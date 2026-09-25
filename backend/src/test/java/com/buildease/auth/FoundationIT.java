@@ -107,7 +107,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(13);
+    assertThat(flyway.info().applied()).hasSize(17);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
