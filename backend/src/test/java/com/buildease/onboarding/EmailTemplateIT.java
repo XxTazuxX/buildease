@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
@@ -60,6 +61,7 @@ class EmailTemplateIT {
   @Autowired IdentityMail mail;
   @Autowired OnboardingService onboarding;
   @Autowired PasswordEncoder passwords;
+  @Autowired TransactionTemplate transactions;
   @MockitoBean MailSettingsService mailSettings;
 
   Actor admin;
@@ -110,11 +112,15 @@ class EmailTemplateIT {
     assertThat(row)
         .containsEntry("subject", "New subject")
         .containsEntry("body", "New body with {{link}}");
-    assertThat(
-            db.rows(
-                "select action from audit_events where target_id=? and action='SETTINGS_UPDATED'",
-                admin.id()))
-        .hasSize(1);
+    var events =
+        transactions.execute(
+            status -> {
+              db.context(admin.id(), null, null);
+              return db.rows(
+                  "select action from audit_events where target_id=? and action='SETTINGS_UPDATED'",
+                  admin.id());
+            });
+    assertThat(events).hasSize(1);
   }
 
   @Test

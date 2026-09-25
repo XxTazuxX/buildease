@@ -26,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
@@ -67,6 +68,7 @@ class ReportingIT {
   @Autowired OccupancyService occupancy;
   @Autowired LeaseService leases;
   @Autowired MaintenanceService maintenance;
+  @Autowired TransactionTemplate transactions;
   @Autowired ReportingService reporting;
   @Autowired PasswordEncoder passwords;
   @Autowired JwtDecoder decoder;
@@ -151,14 +153,21 @@ class ReportingIT {
   }
 
   private void charge(Setup s, UUID lease, BigDecimal amount, LocalDate dueOn) {
-    db.update(
-        "insert into charges(id,organization_id,building_id,lease_id,type,amount,currency,due_on) values (?,?,?,?,'RENT',?,'USD',?)",
-        UUID.randomUUID(),
-        s.organization(),
-        s.building(),
-        lease,
-        amount,
-        dueOn);
+    // set_config(...,true) is transaction-local, so the context set by activeLease()'s own
+    // (already-committed) transaction is gone by the time a bare db.update() runs here; both
+    // calls must share one transaction for the RLS check on this insert to see the right actor/org.
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(s.owner().id(), s.organization(), null);
+          db.update(
+              "insert into charges(id,organization_id,building_id,lease_id,type,amount,currency,due_on) values (?,?,?,?,'RENT',?,'USD',?)",
+              UUID.randomUUID(),
+              s.organization(),
+              s.building(),
+              lease,
+              amount,
+              dueOn);
+        });
   }
 
   @Test

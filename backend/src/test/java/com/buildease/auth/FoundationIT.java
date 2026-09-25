@@ -107,7 +107,7 @@ class FoundationIT {
 
   @Test
   void migrationsRepeatAndRestrictedRoleFailClosed() {
-    assertThat(flyway.info().applied()).hasSize(19);
+    assertThat(flyway.info().applied()).hasSize(20);
     flyway.validate();
     assertThat(flyway.migrate().migrationsExecuted).isZero();
     assertThat(db.rows("select * from buildings")).isEmpty();
@@ -336,13 +336,17 @@ class FoundationIT {
             null,
             null);
     leases.activate(owner, org, building, lease);
-    db.update(
-        "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'USD',current_date)",
-        UUID.randomUUID(),
-        org,
-        building,
-        lease,
-        new BigDecimal("1200.00"));
+    tx.executeWithoutResult(
+        status -> {
+          db.context(owner.id(), org, null);
+          db.update(
+              "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'USD',current_date)",
+              UUID.randomUUID(),
+              org,
+              building,
+              lease,
+              new BigDecimal("1200.00"));
+        });
     leases.recordPayment(
         owner,
         org,
@@ -353,32 +357,40 @@ class FoundationIT {
         null,
         LocalDate.now(),
         null);
-    db.update(
-        "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'EUR',current_date)",
-        UUID.randomUUID(),
-        org,
-        building,
-        lease,
-        new BigDecimal("19.95"));
+    tx.executeWithoutResult(
+        status -> {
+          db.context(owner.id(), org, null);
+          db.update(
+              "insert into charges(id,organization_id,building_id,lease_id,amount,currency,due_on) values (?,?,?,?,?,'EUR',current_date)",
+              UUID.randomUUID(),
+              org,
+              building,
+              lease,
+              new BigDecimal("19.95"));
+        });
     UUID category = maintenance.createCategory(owner, org, building, "Repairs", 1, 2);
     UUID request =
         maintenance.submit(
             owner, org, building, space, category, "Leak", "Pipe is leaking", Impact.HIGH, false);
-    db.update(
-        "update maintenance_requests set resolution_due_at=now()-interval '1 hour' where id=?",
-        request);
     UUID closedRequest =
         maintenance.submit(
             owner, org, building, space, category, "Closed", "Resolved", Impact.LOW, false);
     UUID cancelledRequest =
         maintenance.submit(
             owner, org, building, space, category, "Cancelled", "Duplicate", Impact.LOW, false);
-    db.update(
-        "update maintenance_requests set status='CLOSED',resolution_due_at=now()-interval '1 hour' where id=?",
-        closedRequest);
-    db.update(
-        "update maintenance_requests set status='CANCELLED',resolution_due_at=now()-interval '1 hour' where id=?",
-        cancelledRequest);
+    tx.executeWithoutResult(
+        status -> {
+          db.context(owner.id(), org, null);
+          db.update(
+              "update maintenance_requests set resolution_due_at=now()-interval '1 hour' where id=?",
+              request);
+          db.update(
+              "update maintenance_requests set status='CLOSED',resolution_due_at=now()-interval '1 hour' where id=?",
+              closedRequest);
+          db.update(
+              "update maintenance_requests set status='CANCELLED',resolution_due_at=now()-interval '1 hour' where id=?",
+              cancelledRequest);
+        });
 
     var dashboard = tenants.dashboard(owner, org);
     @SuppressWarnings("unchecked")

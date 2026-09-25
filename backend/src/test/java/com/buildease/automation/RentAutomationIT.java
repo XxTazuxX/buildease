@@ -22,6 +22,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
@@ -64,6 +65,7 @@ class RentAutomationIT {
   @Autowired LeaseService leases;
   @Autowired RentAutomation automation;
   @Autowired PasswordEncoder passwords;
+  @Autowired TransactionTemplate transactions;
 
   Actor admin;
   final String password = "A safe temporary password!";
@@ -180,11 +182,17 @@ class RentAutomationIT {
   @Test
   void lateFeeIsChargedWhenBuildingConfiguresOneAndGraceDaysHaveElapsed() {
     Fixture f = organizationWithActiveLease("E", LocalDate.now().minusDays(10));
-    db.update(
-        "update buildings set late_fee_amount=?,late_fee_grace_days=? where id=?",
-        new BigDecimal("50.00"),
-        5,
-        f.building());
+    // set_config(...,true) is transaction-local, so it must be set in the same transaction as
+    // this update, or the RLS check sees no org context and the update silently matches 0 rows.
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(f.owner().id(), f.organization(), null);
+          db.update(
+              "update buildings set late_fee_amount=?,late_fee_grace_days=? where id=?",
+              new BigDecimal("50.00"),
+              5,
+              f.building());
+        });
 
     automation.run();
 

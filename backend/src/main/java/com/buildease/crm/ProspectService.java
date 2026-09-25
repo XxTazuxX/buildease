@@ -72,7 +72,8 @@ public class ProspectService {
         name.trim(),
         trim(email),
         trim(phone),
-        trim(notes));
+        trim(notes),
+        actor.id());
     db.audit(actor.id(), organization, "PROSPECT_CREATED", id);
     return id;
   }

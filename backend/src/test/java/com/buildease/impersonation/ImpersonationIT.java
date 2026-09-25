@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
@@ -57,6 +58,7 @@ class ImpersonationIT {
   @Autowired ImpersonationService impersonation;
   @Autowired JwtDecoder decoder;
   @Autowired PasswordEncoder passwords;
+  @Autowired TransactionTemplate transactions;
 
   Actor admin;
   UUID targetId;
@@ -133,10 +135,21 @@ class ImpersonationIT {
   void actionsPerformedWhileImpersonatingAreAuditedUnderBothIdentities() {
     var tokens = impersonation.start(admin, targetId);
     Actor impersonated = auth.authenticate(decoder.decode((String) tokens.get("accessToken")));
-    db.context(impersonated.id(), null, impersonated.impersonatedBy());
-    db.audit(impersonated.id(), null, "TEST_ACTION", impersonated.id());
+    // set_config(...,true) is transaction-local: context() and the operation relying on it must
+    // share one transaction, or the config reverts the instant the setting call's own implicit
+    // transaction commits.
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(impersonated.id(), null, impersonated.impersonatedBy());
+          db.audit(impersonated.id(), null, "TEST_ACTION", impersonated.id());
+        });
     var row =
-        db.one("select actor_id,impersonated_by from audit_events where action='TEST_ACTION'");
+        transactions.execute(
+            status -> {
+              db.context(admin.id(), null, null);
+              return db.one(
+                  "select actor_id,impersonated_by from audit_events where action='TEST_ACTION'");
+            });
     assertThat(row)
         .containsEntry("actor_id", targetId)
         .containsEntry("impersonated_by", admin.id());
@@ -146,7 +159,10 @@ class ImpersonationIT {
   void refreshRotatesTheTokenAndRejectsReuse() {
     var tokens = impersonation.start(admin, targetId);
     var refreshed = impersonation.refresh((String) tokens.get("refreshToken"));
-    assertThat(refreshed.get("accessToken")).isNotEqualTo(tokens.get("accessToken"));
+    // Compare the opaque refresh token, not the JWT access token: both tokens carry
+    // second-granularity iat/exp claims, so two issued within the same wall-clock second
+    // (routine on fast CI) would be byte-identical and make that comparison flaky.
+    assertThat(refreshed.get("refreshToken")).isNotEqualTo(tokens.get("refreshToken"));
 
     assertThatThrownBy(() -> impersonation.refresh((String) tokens.get("refreshToken")))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(401));

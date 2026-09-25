@@ -24,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
@@ -60,6 +61,7 @@ class AccountingSyncIT {
   }
 
   @Autowired Store db;
+  @Autowired TransactionTemplate transactions;
   @Autowired TenantService tenants;
   @Autowired BuildingService buildings;
   @Autowired OccupancyService occupancy;
@@ -136,14 +138,20 @@ class AccountingSyncIT {
             null,
             null);
     leases.activate(owner, org, building, lease);
-    db.update(
-        "insert into charges(id,organization_id,building_id,lease_id,type,amount,currency,due_on) values (?,?,?,?,'RENT',?,'USD',?)",
-        UUID.randomUUID(),
-        org,
-        building,
-        lease,
-        new BigDecimal("1200.00"),
-        startsOn);
+    // set_config(...,true) is transaction-local, so it must be set in the same transaction as
+    // this insert, or the RLS check sees no org context and the insert silently matches 0 rows.
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(owner.id(), org, null);
+          db.update(
+              "insert into charges(id,organization_id,building_id,lease_id,type,amount,currency,due_on) values (?,?,?,?,'RENT',?,'USD',?)",
+              UUID.randomUUID(),
+              org,
+              building,
+              lease,
+              new BigDecimal("1200.00"),
+              startsOn);
+        });
     return new Setup(org, building, lease, owner);
   }
 
