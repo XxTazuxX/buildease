@@ -13,6 +13,8 @@ vi.mock("../model/listings", async (importOriginal) => {
       list: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
       detail: vi.fn(),
+      update: vi.fn(),
+      remove: vi.fn(),
       publish: vi.fn().mockResolvedValue(undefined),
       unpublish: vi.fn().mockResolvedValue(undefined),
     },
@@ -57,6 +59,71 @@ it("creates a valid listing and invalidates the list", async () => {
   expect(invalidate).toHaveBeenCalledWith({
     queryKey: ["org", "building", "building", "listings"],
   });
+});
+
+it("edits a listing without its space and refreshes the list", async () => {
+  vi.mocked(listingsApi.update).mockResolvedValue(undefined);
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useListings("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.update("listing-1", {
+      ...validListing,
+      headline: "Renovated 1BR",
+    });
+  });
+  expect(listingsApi.update).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "listing-1",
+    {
+      headline: "Renovated 1BR",
+      description: "Available now.",
+      rentAmount: 1200,
+    },
+  );
+  expect(invalidate).toHaveBeenCalled();
+});
+
+it("rejects an invalid edit before calling the API", async () => {
+  const { result } = renderHook(() => useListings("org", "building"), {
+    wrapper,
+  });
+  let ok: boolean | undefined;
+  await act(async () => {
+    ok = await result.current.update("listing-1", {
+      ...validListing,
+      headline: "",
+    });
+  });
+  expect(ok).toBe(false);
+  expect(listingsApi.update).not.toHaveBeenCalled();
+});
+
+it("deletes a listing, refreshing the list, and reports a refusal", async () => {
+  vi.mocked(listingsApi.remove).mockResolvedValueOnce(undefined);
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useListings("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    expect(await result.current.remove("listing-1")).toBe(true);
+  });
+  expect(listingsApi.remove).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "listing-1",
+  );
+  expect(invalidate).toHaveBeenCalled();
+
+  vi.mocked(listingsApi.remove).mockRejectedValueOnce(
+    new Error("Unpublish the listing before deleting it"),
+  );
+  await act(async () => {
+    expect(await result.current.remove("listing-2")).toBe(false);
+  });
+  expect(result.current.error).toBe("Unpublish the listing before deleting it");
 });
 
 it("publishes and unpublishes through the right endpoints", async () => {

@@ -46,12 +46,37 @@ export function ListingsPanel({
   const vm = useListings(org, building);
   const spaces = useListingSpaces(org, building);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{
+    id: string;
+    headline: string;
+  } | null>(null);
+  const [loadError, setLoadError] = useState("");
   const form = useZodForm(listingFormSchema, emptyListing);
   const [publishing, setPublishing] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [channels, setChannels] = useState<ListingChannel[]>([]);
   const [channelsTried, setChannelsTried] = useState(false);
-  const error = vm.error || vm.list.error?.message;
+  const error = vm.error || loadError || vm.list.error?.message;
+
+  const startEdit = async (id: string) => {
+    setLoadError("");
+    try {
+      const detail = await vm.loadDetail(id);
+      form.reset({
+        spaceId: detail.space_id,
+        headline: detail.headline,
+        description: detail.description,
+        rentAmount: String(detail.rent_amount),
+      });
+      setEditing(id);
+      setCreateOpen(true);
+    } catch (cause) {
+      setLoadError(
+        cause instanceof Error ? cause.message : "Could not load listing",
+      );
+    }
+  };
 
   const spaceName = (id: string) =>
     spaces.data?.find((item) => item.id === id)?.name ?? "Space";
@@ -79,6 +104,8 @@ export function ListingsPanel({
           variant="contained"
           onClick={() => {
             form.reset(emptyListing);
+            setEditing(null);
+            setLoadError("");
             setCreateOpen(true);
           }}
         >
@@ -122,6 +149,25 @@ export function ListingsPanel({
                   Publish
                 </Button>
               )}
+              {item.status !== "PUBLISHED" && (
+                <>
+                  <Button
+                    disabled={vm.busy}
+                    onClick={() => void startEdit(item.id)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    color="error"
+                    disabled={vm.busy}
+                    onClick={() =>
+                      setDeleting({ id: item.id, headline: item.headline })
+                    }
+                  >
+                    Delete
+                  </Button>
+                </>
+              )}
               {item.status === "PUBLISHED" && (
                 <Button
                   color="warning"
@@ -145,16 +191,22 @@ export function ListingsPanel({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>New listing</DialogTitle>
+        <DialogTitle>{editing ? "Edit listing" : "New listing"}</DialogTitle>
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField select label="Space" {...form.field("spaceId")}>
+            <TextField
+              select
+              label="Space"
+              disabled={!!editing}
+              {...form.field("spaceId")}
+            >
               {spaces.data
                 ?.filter(
                   (item) =>
-                    item.rentable &&
-                    ["VACANT", "RESERVED"].includes(item.status),
+                    !!editing ||
+                    (item.rentable &&
+                      ["VACANT", "RESERVED"].includes(item.status)),
                 )
                 .map((item) => (
                   <MenuItem key={item.id} value={item.id}>
@@ -178,14 +230,55 @@ export function ListingsPanel({
               variant="contained"
               disabled={vm.busy}
               onClick={form.submit(async (values) => {
-                if (await vm.create(values)) setCreateOpen(false);
+                const ok = await (editing
+                  ? vm.update(editing, values)
+                  : vm.create(values));
+                if (ok) setCreateOpen(false);
               })}
             >
-              Create listing
+              {editing ? "Save changes" : "Create listing"}
             </Button>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>
+
+      {deleting && (
+        <AdaptiveDialog
+          open
+          onClose={() => setDeleting(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Delete listing</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Permanently delete &ldquo;{deleting.headline}&rdquo; and its
+                publishing history? This cannot be undone.
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setDeleting(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    if (await vm.remove(deleting.id)) setDeleting(null);
+                  }}
+                >
+                  Delete listing
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
 
       {publishing && (
         <AdaptiveDialog

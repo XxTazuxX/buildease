@@ -88,6 +88,55 @@ public class ListingService {
     return id;
   }
 
+  public void update(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID listing,
+      String headline,
+      String description,
+      BigDecimal rentAmount) {
+    manager(actor, organization, building);
+    var row = lockedListing(organization, building, listing);
+    // A published listing is live on partner channels; editing it here would let those copies
+    // drift.
+    if (ListingStatus.valueOf((String) row.get("status")) == ListingStatus.PUBLISHED)
+      throw new ApiException(409, "Unpublish the listing before editing it");
+    db.update(
+        "update listings set headline=?,description=?,rent_amount=?,updated_at=now() where id=?",
+        headline.trim(),
+        description.trim(),
+        rentAmount,
+        listing);
+    db.audit(actor.id(), organization, "LISTING_UPDATED", listing);
+  }
+
+  public void delete(Actor actor, UUID organization, UUID building, UUID listing) {
+    manager(actor, organization, building);
+    var row = lockedListing(organization, building, listing);
+    if (ListingStatus.valueOf((String) row.get("status")) == ListingStatus.PUBLISHED)
+      throw new ApiException(409, "Unpublish the listing before deleting it");
+    if (db.find(
+            "select 1 from prospects where organization_id=? and building_id=? and listing_id=? limit 1",
+            organization,
+            building,
+            listing)
+        .isPresent())
+      throw new ApiException(
+          409, "Prospects were created from this listing, so it cannot be deleted");
+    db.update(
+        "delete from listing_syndications where organization_id=? and building_id=? and listing_id=?",
+        organization,
+        building,
+        listing);
+    db.update(
+        "delete from listings where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        listing);
+    db.audit(actor.id(), organization, "LISTING_DELETED", listing);
+  }
+
   public void publish(
       Actor actor, UUID organization, UUID building, UUID listing, Set<ListingChannel> channels) {
     manager(actor, organization, building);

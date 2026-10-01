@@ -4,8 +4,10 @@ import { buildingsApi, type Space } from "@/modules/buildings";
 import {
   listingsApi,
   newListingSchema,
+  updateListingSchema,
   type ListingChannel,
   type NewListing,
+  type UpdatedListing,
 } from "../model/listings";
 
 export function useListings(org: string, building: string) {
@@ -40,6 +42,12 @@ export function useListings(org: string, building: string) {
       run(() =>
         listingsApi.create(org, building, newListingSchema.parse(body)),
       ),
+    loadDetail: (id: string) => listingsApi.detail(org, building, id),
+    update: (id: string, body: UpdatedListing) =>
+      run(() =>
+        listingsApi.update(org, building, id, updateListingSchema.parse(body)),
+      ),
+    remove: (id: string) => run(() => listingsApi.remove(org, building, id)),
     publish: (id: string, channels: ListingChannel[]) =>
       run(() => listingsApi.publish(org, building, id, channels)),
     unpublish: (id: string) =>

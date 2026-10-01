@@ -24,6 +24,11 @@ public class ListingController {
       @NotBlank @Size(max = 4000) String description,
       @NotNull @DecimalMin("0.01") @Digits(integer = 12, fraction = 2) BigDecimal rentAmount) {}
 
+  public record UpdateBody(
+      @NotBlank @Size(max = 160) String headline,
+      @NotBlank @Size(max = 4000) String description,
+      @NotNull @DecimalMin("0.01") @Digits(integer = 12, fraction = 2) BigDecimal rentAmount) {}
+
   public record PublishBody(@NotEmpty Set<ListingChannel> channels) {}
 
   @GetMapping
@@ -61,6 +66,32 @@ public class ListingController {
       @PathVariable UUID building,
       @PathVariable UUID listing) {
     return service.detail(actor, organization, building, listing);
+  }
+
+  @PatchMapping("/{listing}")
+  void update(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID listing,
+      @Valid @RequestBody UpdateBody body) {
+    service.update(
+        actor,
+        organization,
+        building,
+        listing,
+        body.headline(),
+        body.description(),
+        body.rentAmount());
+  }
+
+  @DeleteMapping("/{listing}")
+  void delete(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID listing) {
+    service.delete(actor, organization, building, listing);
   }
 
   @PostMapping("/{listing}/publish")

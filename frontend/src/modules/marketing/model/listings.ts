@@ -47,6 +47,10 @@ export const newListingSchema = z.object({
 });
 export type NewListing = z.infer<typeof newListingSchema>;
 
+/** The space of an existing listing is fixed; only its text and rent can change. */
+export const updateListingSchema = newListingSchema.omit({ spaceId: true });
+export type UpdatedListing = z.infer<typeof updateListingSchema>;
+
 export const listingFormSchema = z.object({
   spaceId: requiredChoice("Select a space"),
   headline: requiredText(160),
@@ -66,6 +70,10 @@ export const listingsApi = {
     api<{ id: string }>(base(org, building), "POST", body),
   detail: (org: string, building: string, id: string) =>
     api<ListingDetail>(`${base(org, building)}/${id}`),
+  update: (org: string, building: string, id: string, body: UpdatedListing) =>
+    api(`${base(org, building)}/${id}`, "PATCH", body),
+  remove: (org: string, building: string, id: string) =>
+    api(`${base(org, building)}/${id}`, "DELETE"),
   publish: (
     org: string,
     building: string,

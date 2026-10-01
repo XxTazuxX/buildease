@@ -60,6 +60,7 @@ class ListingIT {
   @Autowired TenantService tenants;
   @Autowired BuildingService buildings;
   @Autowired ListingService listings;
+  @Autowired com.buildease.crm.ProspectService prospects;
   @Autowired PasswordEncoder passwords;
   @Autowired JwtDecoder decoder;
   @Autowired com.buildease.auth.AuthService auth;
@@ -188,6 +189,155 @@ class ListingIT {
     @SuppressWarnings("unchecked")
     var syndications = (java.util.List<java.util.Map<String, Object>>) detail.get("syndications");
     assertThat(syndications.getFirst()).containsEntry("status", "REMOVED");
+  }
+
+  private UUID draftListing(Setup s) {
+    return listings.create(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.space(),
+        "Bright 1BR",
+        "Available now.",
+        new BigDecimal("1200.00"));
+  }
+
+  @Test
+  void editingAListingChangesItsTextAndRentButNotWhilePublished() {
+    Setup s = organizationWithVacantSpace();
+    UUID listing = draftListing(s);
+
+    listings.update(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        listing,
+        "  Renovated 1BR  ",
+        "New kitchen.",
+        new BigDecimal("1350.50"));
+
+    var detail = listings.detail(s.owner(), s.organization(), s.building(), listing);
+    assertThat(detail)
+        .containsEntry("headline", "Renovated 1BR")
+        .containsEntry("description", "New kitchen.")
+        .containsEntry("rent_amount", new BigDecimal("1350.50"));
+
+    listings.publish(
+        s.owner(), s.organization(), s.building(), listing, Set.of(ListingChannel.ZILLOW));
+    assertThatThrownBy(
+            () ->
+                listings.update(
+                    s.owner(),
+                    s.organization(),
+                    s.building(),
+                    listing,
+                    "Changed while live",
+                    "Nope.",
+                    new BigDecimal("1.00")))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+
+    listings.unpublish(s.owner(), s.organization(), s.building(), listing);
+    listings.update(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        listing,
+        "Editable again",
+        "Back to draft text.",
+        new BigDecimal("1300.00"));
+    assertThat(listings.detail(s.owner(), s.organization(), s.building(), listing))
+        .containsEntry("headline", "Editable again");
+  }
+
+  @Test
+  void deletingRemovesTheListingAndItsSyndicationHistory() {
+    Setup s = organizationWithVacantSpace();
+    UUID neverPublished = draftListing(s);
+    listings.delete(s.owner(), s.organization(), s.building(), neverPublished);
+    assertThatThrownBy(
+            () -> listings.detail(s.owner(), s.organization(), s.building(), neverPublished))
+        .isInstanceOf(ApiException.class);
+
+    UUID wasPublished = draftListing(s);
+    listings.publish(
+        s.owner(), s.organization(), s.building(), wasPublished, Set.of(ListingChannel.ZILLOW));
+    listings.unpublish(s.owner(), s.organization(), s.building(), wasPublished);
+    listings.delete(s.owner(), s.organization(), s.building(), wasPublished);
+
+    assertThatThrownBy(
+            () -> listings.detail(s.owner(), s.organization(), s.building(), wasPublished))
+        .isInstanceOf(ApiException.class);
+    assertThat(
+            listings.list(s.owner(), s.organization(), s.building(), null, 0).stream()
+                .map(row -> row.get("id")))
+        .doesNotContain(neverPublished, wasPublished);
+    assertThat(db.find("select 1 from listing_syndications where listing_id=?", wasPublished))
+        .isEmpty();
+  }
+
+  @Test
+  void aPublishedListingCannotBeDeleted() {
+    Setup s = organizationWithVacantSpace();
+    UUID listing = draftListing(s);
+    listings.publish(
+        s.owner(), s.organization(), s.building(), listing, Set.of(ListingChannel.ZILLOW));
+
+    assertThatThrownBy(() -> listings.delete(s.owner(), s.organization(), s.building(), listing))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    assertThat(listings.detail(s.owner(), s.organization(), s.building(), listing))
+        .containsEntry("status", "PUBLISHED");
+  }
+
+  @Test
+  void aListingWithProspectsCannotBeDeleted() {
+    Setup s = organizationWithVacantSpace();
+    UUID listing = draftListing(s);
+    prospects.create(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.space(),
+        listing,
+        "Jane Prospect",
+        null,
+        null,
+        null);
+
+    assertThatThrownBy(() -> listings.delete(s.owner(), s.organization(), s.building(), listing))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    assertThat(listings.detail(s.owner(), s.organization(), s.building(), listing))
+        .containsEntry("status", "DRAFT");
+  }
+
+  @Test
+  void nonManagerCannotEditOrDeleteListings() {
+    Setup s = organizationWithVacantSpace();
+    UUID listing = draftListing(s);
+    String tenantEmail = "tenant-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        s.owner(),
+        s.organization(),
+        tenantEmail,
+        "Tenant",
+        password,
+        false,
+        s.building(),
+        Set.of(Role.TENANT));
+    Actor tenant = actor(tenantEmail);
+
+    assertThatThrownBy(
+            () ->
+                listings.update(
+                    tenant,
+                    s.organization(),
+                    s.building(),
+                    listing,
+                    "Hacked",
+                    "Nope.",
+                    new BigDecimal("1.00")))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    assertThatThrownBy(() -> listings.delete(tenant, s.organization(), s.building(), listing))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
 
   @Test

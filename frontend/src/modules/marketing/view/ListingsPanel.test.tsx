@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { ListingsPanel } from "./ListingsPanel";
@@ -132,6 +132,143 @@ it("requires at least one channel before publishing", async () => {
     await within(dialog).findByText("Select at least one channel"),
   ).toBeInTheDocument();
   expect(publish).not.toHaveBeenCalled();
+});
+
+const withVm = (overrides: Record<string, unknown>) =>
+  vi.mocked(useListings).mockReturnValue({
+    ...vi.mocked(useListings)("org", "building"),
+    ...overrides,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+
+const storedDetail = {
+  id: "listing-1",
+  space_id: "space-1",
+  headline: "Bright 1BR",
+  description: "Sunny flat",
+  rent_amount: "1200.00",
+};
+
+it("opens Edit with the stored values, locks the space and saves changes", async () => {
+  const loadDetail = vi.fn().mockResolvedValue(storedDetail);
+  const update = vi.fn().mockResolvedValue(true);
+  withVm({ loadDetail, update });
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText("Edit listing")).toBeInTheDocument();
+  expect(within(dialog).getByLabelText("Headline")).toHaveValue("Bright 1BR");
+  expect(within(dialog).getByLabelText("Description")).toHaveValue(
+    "Sunny flat",
+  );
+  expect(within(dialog).getByLabelText("Monthly rent")).toHaveValue(1200);
+  expect(within(dialog).getByLabelText("Space")).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
+
+  const headline = within(dialog).getByLabelText("Headline");
+  await user.clear(headline);
+  await user.type(headline, "Renovated 1BR");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save changes" }),
+  );
+  await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  expect(update).toHaveBeenCalledWith(
+    "listing-1",
+    expect.objectContaining({
+      headline: "Renovated 1BR",
+      description: "Sunny flat",
+      rentAmount: 1200,
+    }),
+  );
+});
+
+it("validates an edit before saving it", async () => {
+  const update = vi.fn().mockResolvedValue(true);
+  withVm({ loadDetail: vi.fn().mockResolvedValue(storedDetail), update });
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.clear(within(dialog).getByLabelText("Headline"));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save changes" }),
+  );
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(update).not.toHaveBeenCalled();
+});
+
+it("shows an error instead of opening Edit when the listing cannot be loaded", async () => {
+  withVm({ loadDetail: vi.fn().mockRejectedValue(new Error("Not found")) });
+  render(<ListingsPanel org="org" building="building" />);
+  await userEvent.setup().click(screen.getByRole("button", { name: "Edit" }));
+  expect(await screen.findByText("Not found")).toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it("asks for confirmation before deleting a listing", async () => {
+  const remove = vi.fn().mockResolvedValue(true);
+  withVm({ remove });
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    within(dialog).getByText(/Permanently delete .*Bright 1BR/),
+  ).toBeInTheDocument();
+  expect(remove).not.toHaveBeenCalled();
+
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(remove).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete listing",
+    }),
+  );
+  await waitFor(() => expect(remove).toHaveBeenCalledWith("listing-1"));
+});
+
+it("keeps the confirmation open and shows why when the server refuses the delete", async () => {
+  const remove = vi.fn().mockResolvedValue(false);
+  withVm({
+    remove,
+    error: "Prospects were created from this listing, so it cannot be deleted",
+  });
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Delete listing" }),
+  );
+  await waitFor(() => expect(remove).toHaveBeenCalled());
+  expect(
+    within(screen.getByRole("dialog")).getByText(
+      /Prospects were created from this listing/,
+    ),
+  ).toBeInTheDocument();
+});
+
+it("offers Unpublish but not Edit or Delete for a published listing", () => {
+  const base = vi.mocked(useListings)("org", "building");
+  withVm({
+    list: {
+      ...base.list,
+      data: [{ ...base.list.data![0], status: "PUBLISHED" }],
+    },
+  });
+  render(<ListingsPanel org="org" building="building" />);
+  expect(screen.getByRole("button", { name: "Unpublish" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Edit" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Delete" }),
+  ).not.toBeInTheDocument();
 });
 
 it("publishes a listing to the selected channels", async () => {
