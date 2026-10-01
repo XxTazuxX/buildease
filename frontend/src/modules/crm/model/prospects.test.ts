@@ -1,5 +1,40 @@
 import { describe, it, expect } from "vitest";
-import { newProspectSchema } from "./prospects";
+import { linkLeaseSchema, newProspectSchema } from "./prospects";
+
+describe("newProspectSchema backend limits", () => {
+  const valid = {
+    spaceId: "11111111-1111-1111-1111-111111111111",
+    name: "Jane",
+  };
+  it("enforces name 160, email 254, phone 40 and notes 2000", () => {
+    const fails = (patch: object) =>
+      !newProspectSchema.safeParse({ ...valid, ...patch }).success;
+    expect(fails({ name: "n".repeat(161) })).toBe(true);
+    expect(fails({ email: `${"a".repeat(250)}@b.co` })).toBe(true);
+    expect(fails({ phone: "1".repeat(41) })).toBe(true);
+    expect(fails({ notes: "n".repeat(2001) })).toBe(true);
+  });
+  it("asks for a space when none is chosen", () => {
+    const result = newProspectSchema.safeParse({ ...valid, spaceId: "" });
+    expect(!result.success && result.error.issues[0].message).toBe(
+      "Select a space",
+    );
+  });
+});
+
+describe("linkLeaseSchema", () => {
+  it("requires the lease id to be a UUID", () => {
+    expect(linkLeaseSchema.safeParse({ leaseId: "lease-1" }).success).toBe(
+      false,
+    );
+    expect(linkLeaseSchema.safeParse({ leaseId: "" }).success).toBe(false);
+    expect(
+      linkLeaseSchema.safeParse({
+        leaseId: "11111111-1111-1111-1111-111111111111",
+      }).success,
+    ).toBe(true);
+  });
+});
 
 describe("newProspectSchema", () => {
   const valid = {

@@ -434,6 +434,7 @@ export function PlatformPage() {
                         name: "ownerEmail",
                         label: "Owner email",
                         type: "email",
+                        max: 254,
                       },
                       { name: "ownerName", label: "Owner name", max: 120 },
                       {
@@ -446,7 +447,12 @@ export function PlatformPage() {
                     ]
                   : [
                       { name: "name", label: "Name", max: 120 },
-                      { name: "email", label: "Email", type: "email" },
+                      {
+                        name: "email",
+                        label: "Email",
+                        type: "email",
+                        max: 254,
+                      },
                       {
                         name: "temporaryPassword",
                         label: "Temporary password",

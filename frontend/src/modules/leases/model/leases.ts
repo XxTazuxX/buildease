@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalDate,
+  optionalMoney,
+  requireDateOrder,
+  requiredChoice,
+  requiredDate,
+  requiredMoney,
+} from "@/shared/forms/rules";
 
 export const leaseStatuses = ["DRAFT", "ACTIVE", "ENDED", "CANCELLED"] as const;
 export const paymentMethods = [
@@ -74,6 +83,69 @@ export const leaseSchema = z.object({
   depositHeldOn: z.string().optional(),
 });
 export type NewLease = z.infer<typeof leaseSchema>;
+
+export const leaseFormSchema = z
+  .object({
+    residentId: requiredChoice("Select a resident"),
+    spaceId: requiredChoice("Select a space"),
+    startsOn: requiredDate(),
+    endsOn: optionalDate(),
+    rentAmount: requiredMoney({ min: 0.01 }),
+    firstChargeOn: requiredDate(),
+    depositAmount: optionalMoney(),
+  })
+  .superRefine((lease, ctx) => {
+    requireDateOrder(
+      ctx,
+      lease.startsOn,
+      lease.endsOn,
+      "endsOn",
+      "End date cannot be before the start date",
+    );
+    requireDateOrder(
+      ctx,
+      lease.startsOn,
+      lease.firstChargeOn,
+      "firstChargeOn",
+      "First charge date cannot precede the lease start",
+    );
+  });
+
+export const leaseEndFormSchema = (startsOn: string) =>
+  z
+    .object({
+      endsOn: requiredDate(),
+      reason: enumChoice(leaseEndReasons),
+    })
+    .superRefine((end, ctx) =>
+      requireDateOrder(
+        ctx,
+        startsOn,
+        end.endsOn,
+        "endsOn",
+        "End date cannot be before the lease start",
+      ),
+    );
+
+export const paymentFormSchema = z.object({
+  amount: requiredMoney({ min: 0.01 }),
+  method: enumChoice(paymentMethods),
+  receivedOn: requiredDate(),
+});
+
+export const depositFormSchema = z.object({
+  amount: requiredMoney(),
+  heldOn: requiredDate(),
+});
+
+export const refundFormSchema = (held: number) =>
+  z.object({
+    refundedAmount: requiredMoney({ min: 0.01 }).refine(
+      (amount) => amount <= held,
+      "Refund cannot exceed the held deposit",
+    ),
+    refundedOn: requiredDate(),
+  });
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/leases`;

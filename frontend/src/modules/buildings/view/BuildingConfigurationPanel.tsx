@@ -16,23 +16,44 @@ import {
   Typography,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import {
+  configurationFormSchema,
+  levelFormSchema,
+  spaceFormSchema,
   spaceStatuses,
   spaceTypes,
-  type BuildingConfiguration,
   type SpaceType,
 } from "../model/buildings";
 import { useBuildingConfiguration } from "../viewmodel/useBuildingConfiguration";
 
-type ConfigurationForm = Omit<
-  BuildingConfiguration,
-  "lateFeeAmount" | "lateFeeGraceDays"
-> & {
-  lateFeeAmount: string;
-  lateFeeGraceDays: string;
+const configurationFields = {
+  name: "Building name",
+  addressLine1: "Address line 1",
+  addressLine2: "Address line 2",
+  city: "City",
+  region: "Region",
+  postalCode: "Postal code",
+  countryCode: "Country code",
+  timezone: "Timezone",
+  currency: "Currency",
+  emergencyContact: "Emergency contact",
+} as const;
+
+const emptyLevel = { name: "", code: "", sortOrder: "0" };
+const emptySpace = {
+  name: "",
+  code: "",
+  type: "FLAT" as SpaceType,
+  levelId: "",
+  parentSpaceId: "",
+  rentable: true,
+  area: "",
+  capacity: "",
+  notes: "",
 };
 
-const emptyConfiguration: ConfigurationForm = {
+const emptyConfiguration = {
   name: "",
   addressLine1: "",
   addressLine2: "",
@@ -60,25 +81,15 @@ export function BuildingConfigurationPanel({
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
   const [spaceOpen, setSpaceOpen] = useState(false);
-  const [configuration, setConfiguration] =
-    useState<ConfigurationForm>(emptyConfiguration);
-  const [level, setLevel] = useState({ name: "", code: "", sortOrder: 0 });
-  const [space, setSpace] = useState({
-    name: "",
-    code: "",
-    type: "FLAT" as SpaceType,
-    levelId: "",
-    parentSpaceId: "",
-    rentable: true,
-    area: "",
-    capacity: "",
-    notes: "",
-  });
+  const configuration = useZodForm(configurationFormSchema, emptyConfiguration);
+  const level = useZodForm(levelFormSchema, emptyLevel);
+  const space = useZodForm(spaceFormSchema, emptySpace);
+  const { reset: resetConfiguration } = configuration;
 
   useEffect(() => {
     if (!vm.profile.data) return;
     const p = vm.profile.data;
-    setConfiguration({
+    resetConfiguration({
       name: p.name,
       addressLine1: p.address_line1 ?? "",
       addressLine2: p.address_line2 ?? "",
@@ -92,7 +103,7 @@ export function BuildingConfigurationPanel({
       lateFeeAmount: p.late_fee_amount ?? "",
       lateFeeGraceDays: String(p.late_fee_grace_days),
     });
-  }, [vm.profile.data]);
+  }, [vm.profile.data, resetConfiguration]);
 
   const errors =
     vm.error ||
@@ -129,10 +140,22 @@ export function BuildingConfigurationPanel({
               >
                 Building settings
               </Button>
-              <Button variant="outlined" onClick={() => setLevelOpen(true)}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  level.reset();
+                  setLevelOpen(true);
+                }}
+              >
                 Add level
               </Button>
-              <Button variant="contained" onClick={() => setSpaceOpen(true)}>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  space.reset();
+                  setSpaceOpen(true);
+                }}
+              >
                 Add space
               </Button>
             </Stack>
@@ -253,28 +276,16 @@ export function BuildingConfigurationPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            {Object.entries({
-              name: "Building name",
-              addressLine1: "Address line 1",
-              addressLine2: "Address line 2",
-              city: "City",
-              region: "Region",
-              postalCode: "Postal code",
-              countryCode: "Country code",
-              timezone: "Timezone",
-              currency: "Currency",
-              emergencyContact: "Emergency contact",
-            }).map(([key, label]) => (
+            {(
+              Object.entries(configurationFields) as [
+                keyof typeof configurationFields,
+                string,
+              ][]
+            ).map(([key, label]) => (
               <TextField
                 key={key}
                 label={label}
-                value={configuration[key as keyof ConfigurationForm]}
-                onChange={(event) =>
-                  setConfiguration((current) => ({
-                    ...current,
-                    [key]: event.target.value,
-                  }))
-                }
+                {...configuration.field(key)}
               />
             ))}
             <Divider />
@@ -284,44 +295,20 @@ export function BuildingConfigurationPanel({
             <TextField
               label="Late fee amount (blank disables late fees)"
               type="number"
-              value={configuration.lateFeeAmount}
-              onChange={(e) =>
-                setConfiguration({
-                  ...configuration,
-                  lateFeeAmount: e.target.value,
-                })
-              }
+              {...configuration.field("lateFeeAmount")}
             />
             <TextField
               label="Grace period before a late fee applies (days)"
               type="number"
-              value={configuration.lateFeeGraceDays}
-              onChange={(e) =>
-                setConfiguration({
-                  ...configuration,
-                  lateFeeGraceDays: e.target.value,
-                })
-              }
+              {...configuration.field("lateFeeGraceDays")}
             />
             <Button
               variant="contained"
               disabled={vm.busy}
-              onClick={() =>
-                void vm
-                  .configure({
-                    ...configuration,
-                    lateFeeAmount:
-                      configuration.lateFeeAmount === ""
-                        ? null
-                        : Number(configuration.lateFeeAmount),
-                    lateFeeGraceDays: Number(
-                      configuration.lateFeeGraceDays || 0,
-                    ),
-                  })
-                  .then((ok) => {
-                    if (ok) setConfigurationOpen(false);
-                  })
-              }
+              onClick={configuration.submit(async (values) => {
+                const ok = await vm.configure(values);
+                if (ok) setConfigurationOpen(false);
+              })}
             >
               Save building settings
             </Button>
@@ -339,35 +326,23 @@ export function BuildingConfigurationPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Level name"
-              value={level.name}
-              onChange={(e) => setLevel({ ...level, name: e.target.value })}
-            />
-            <TextField
-              label="Level code"
-              value={level.code}
-              onChange={(e) => setLevel({ ...level, code: e.target.value })}
-            />
+            <TextField label="Level name" {...level.field("name")} />
+            <TextField label="Level code" {...level.field("code")} />
             <TextField
               type="number"
               label="Display order"
-              value={level.sortOrder}
-              onChange={(e) =>
-                setLevel({ ...level, sortOrder: Number(e.target.value) })
-              }
+              {...level.field("sortOrder")}
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !level.name || !level.code}
-              onClick={() =>
-                void vm.createLevel(level).then((ok) => {
-                  if (ok) {
-                    setLevelOpen(false);
-                    setLevel({ name: "", code: "", sortOrder: 0 });
-                  }
-                })
-              }
+              disabled={vm.busy}
+              onClick={level.submit(async (values) => {
+                const ok = await vm.createLevel(values);
+                if (ok) {
+                  setLevelOpen(false);
+                  level.reset();
+                }
+              })}
             >
               Add level
             </Button>
@@ -385,24 +360,9 @@ export function BuildingConfigurationPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Space name"
-              value={space.name}
-              onChange={(e) => setSpace({ ...space, name: e.target.value })}
-            />
-            <TextField
-              label="Space code"
-              value={space.code}
-              onChange={(e) => setSpace({ ...space, code: e.target.value })}
-            />
-            <TextField
-              select
-              label="Space type"
-              value={space.type}
-              onChange={(e) =>
-                setSpace({ ...space, type: e.target.value as SpaceType })
-              }
-            >
+            <TextField label="Space name" {...space.field("name")} />
+            <TextField label="Space code" {...space.field("code")} />
+            <TextField select label="Space type" {...space.field("type")}>
               {spaceTypes.map((type) => (
                 <MenuItem key={type} value={type}>
                   {type.replaceAll("_", " ")}
@@ -412,8 +372,7 @@ export function BuildingConfigurationPanel({
             <TextField
               select
               label="Level or zone"
-              value={space.levelId}
-              onChange={(e) => setSpace({ ...space, levelId: e.target.value })}
+              {...space.field("levelId")}
             >
               <MenuItem value="">Directly in building</MenuItem>
               {vm.levels.data?.map((item) => (
@@ -425,10 +384,7 @@ export function BuildingConfigurationPanel({
             <TextField
               select
               label="Parent space"
-              value={space.parentSpaceId}
-              onChange={(e) =>
-                setSpace({ ...space, parentSpaceId: e.target.value })
-              }
+              {...space.field("parentSpaceId")}
             >
               <MenuItem value="">No parent</MenuItem>
               {vm.spaces.data?.map((item) => (
@@ -437,58 +393,46 @@ export function BuildingConfigurationPanel({
                 </MenuItem>
               ))}
             </TextField>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              sx={{ alignItems: { sm: "flex-start" } }}
+            >
               <TextField
                 fullWidth
                 type="number"
                 label="Area (m²)"
-                value={space.area}
-                onChange={(e) => setSpace({ ...space, area: e.target.value })}
+                {...space.field("area")}
               />
               <TextField
                 fullWidth
                 type="number"
                 label="Capacity"
-                value={space.capacity}
-                onChange={(e) =>
-                  setSpace({ ...space, capacity: e.target.value })
-                }
+                {...space.field("capacity")}
               />
             </Stack>
             <TextField
               multiline
               minRows={2}
               label="Notes"
-              value={space.notes}
-              onChange={(e) => setSpace({ ...space, notes: e.target.value })}
+              {...space.field("notes")}
             />
             <FormControlLabel
               control={
                 <Checkbox
-                  checked={space.rentable}
-                  onChange={(_, checked) =>
-                    setSpace({ ...space, rentable: checked })
-                  }
+                  checked={space.values.rentable}
+                  onChange={(_, checked) => space.setValue("rentable", checked)}
                 />
               }
               label="Rentable space"
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !space.name || !space.code}
-              onClick={() =>
-                void vm
-                  .createSpace({
-                    ...space,
-                    levelId: space.levelId || null,
-                    parentSpaceId: space.parentSpaceId || null,
-                    area: space.area ? Number(space.area) : null,
-                    capacity: space.capacity ? Number(space.capacity) : null,
-                  })
-                  .then((ok) => {
-                    if (ok) setSpaceOpen(false);
-                  })
-              }
+              disabled={vm.busy}
+              onClick={space.submit(async (values) => {
+                const ok = await vm.createSpace(values);
+                if (ok) setSpaceOpen(false);
+              })}
             >
               Add space
             </Button>

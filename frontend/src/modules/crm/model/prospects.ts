@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import {
+  optionalEmail,
+  optionalText,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const prospectStatuses = [
   "NEW",
@@ -30,13 +35,17 @@ export interface ProspectDetail extends ProspectSummary {
 }
 
 export const newProspectSchema = z.object({
-  spaceId: z.string().uuid(),
-  name: z.string().trim().min(1).max(160),
-  email: z.union([z.literal(""), z.string().trim().email()]).optional(),
-  phone: z.string().trim().max(40).optional(),
-  notes: z.string().trim().max(2000).optional(),
+  spaceId: z.string().uuid("Select a space"),
+  name: requiredText(160),
+  email: optionalEmail(254).optional(),
+  phone: optionalText(40).optional(),
+  notes: optionalText(2000).optional(),
 });
 export type NewProspect = z.infer<typeof newProspectSchema>;
+
+export const linkLeaseSchema = z.object({
+  leaseId: z.string().trim().uuid("Enter a valid lease ID"),
+});
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/prospects`;

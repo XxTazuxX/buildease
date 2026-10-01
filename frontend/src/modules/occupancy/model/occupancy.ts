@@ -1,4 +1,26 @@
+import { z } from "zod";
 import { api } from "@/shared/api/client";
+import {
+  optionalText,
+  requiredChoice,
+  requiredText,
+} from "@/shared/forms/rules";
+
+export const residentFormSchema = z.object({
+  accountId: requiredChoice("Select a tenant account"),
+  displayName: requiredText(120),
+  phone: optionalText(40),
+});
+export const residentUpdateFormSchema = z.object({
+  displayName: requiredText(120),
+  phone: optionalText(40),
+  active: z.boolean(),
+});
+export const assignmentFormSchema = z.object({
+  residentId: requiredChoice("Select a resident"),
+  spaceId: requiredChoice("Select a space"),
+});
+
 export interface Assignment {
   id: string;
   space_id: string;

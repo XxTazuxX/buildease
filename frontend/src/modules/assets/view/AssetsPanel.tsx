@@ -14,7 +14,13 @@ import {
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
-import { assetCategories, type AssetCategory } from "../model/assets";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  assetCategories,
+  assetSchema,
+  meterReadingSchema,
+  type AssetCategory,
+} from "../model/assets";
 import {
   useAssetDetail,
   useAssets,
@@ -43,7 +49,7 @@ export function AssetsPanel({
   const vm = useAssets(org, building);
   const spaces = useAssetSpaces(org, building);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(emptyAsset);
+  const form = useZodForm(assetSchema, emptyAsset);
   const [viewing, setViewing] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -51,7 +57,7 @@ export function AssetsPanel({
     setLoadError("");
     try {
       const detail = await vm.loadDetail(id);
-      setForm({
+      form.reset({
         spaceId: detail.space_id ?? "",
         name: detail.name,
         category: detail.category,
@@ -99,7 +105,7 @@ export function AssetsPanel({
         <Button
           variant="contained"
           onClick={() => {
-            setForm(emptyAsset);
+            form.reset(emptyAsset);
             setEditing(null);
             setCreateOpen(true);
           }}
@@ -174,8 +180,7 @@ export function AssetsPanel({
             <TextField
               select
               label="Space (optional, blank = building-wide)"
-              value={form.spaceId}
-              onChange={(e) => setForm({ ...form, spaceId: e.target.value })}
+              {...form.field("spaceId")}
             >
               <MenuItem value="">Building-wide</MenuItem>
               {spaces.data?.map((item) => (
@@ -184,19 +189,8 @@ export function AssetsPanel({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <TextField
-              select
-              label="Category"
-              value={form.category}
-              onChange={(e) =>
-                setForm({ ...form, category: e.target.value as AssetCategory })
-              }
-            >
+            <TextField label="Name" {...form.field("name")} />
+            <TextField select label="Category" {...form.field("category")}>
               {assetCategories.map((category) => (
                 <MenuItem key={category} value={category}>
                   {category.replaceAll("_", " ")}
@@ -205,56 +199,40 @@ export function AssetsPanel({
             </TextField>
             <TextField
               label="Manufacturer (optional)"
-              value={form.manufacturer}
-              onChange={(e) =>
-                setForm({ ...form, manufacturer: e.target.value })
-              }
+              {...form.field("manufacturer")}
             />
-            <TextField
-              label="Model (optional)"
-              value={form.model}
-              onChange={(e) => setForm({ ...form, model: e.target.value })}
-            />
+            <TextField label="Model (optional)" {...form.field("model")} />
             <TextField
               label="Serial number (optional)"
-              value={form.serialNumber}
-              onChange={(e) =>
-                setForm({ ...form, serialNumber: e.target.value })
-              }
+              {...form.field("serialNumber")}
             />
             <TextField
               label="Install date (optional)"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={form.installDate}
-              onChange={(e) =>
-                setForm({ ...form, installDate: e.target.value })
-              }
+              {...form.field("installDate")}
             />
             <TextField
               label="Warranty expires on (optional)"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={form.warrantyExpiresOn}
-              onChange={(e) =>
-                setForm({ ...form, warrantyExpiresOn: e.target.value })
-              }
+              {...form.field("warrantyExpiresOn")}
             />
             <TextField
               label="Notes (optional)"
               multiline
               minRows={2}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              {...form.field("notes")}
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !form.name.trim()}
-              onClick={() =>
-                void (
-                  editing ? vm.update(editing, form) : vm.create(form)
-                ).then((ok) => ok && setCreateOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={form.submit(async (values) => {
+                const ok = await (editing
+                  ? vm.update(editing, values)
+                  : vm.create(values));
+                if (ok) setCreateOpen(false);
+              })}
             >
               {editing ? "Save changes" : "Add asset"}
             </Button>
@@ -286,8 +264,7 @@ function AssetDetailDialog({
   onClose: () => void;
 }) {
   const vm = useAssetDetail(org, building, asset);
-  const [value, setValue] = useState("");
-  const [unit, setUnit] = useState("hours");
+  const reading = useZodForm(meterReadingSchema, { value: "", unit: "hours" });
 
   return (
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
@@ -326,27 +303,23 @@ function AssetDetailDialog({
                 {new Date(reading.recorded_at).toLocaleString()}
               </Typography>
             ))}
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
               <TextField
                 size="small"
                 label="Value"
                 type="number"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
+                {...reading.field("value")}
               />
-              <TextField
-                size="small"
-                label="Unit"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-              />
+              <TextField size="small" label="Unit" {...reading.field("unit")} />
               <Button
-                disabled={vm.busy || !value}
-                onClick={() =>
-                  void vm
-                    .recordMeterReading(Number(value), unit)
-                    .then((ok) => ok && setValue(""))
-                }
+                disabled={vm.busy}
+                onClick={reading.submit(async (values) => {
+                  const ok = await vm.recordMeterReading(
+                    values.value,
+                    values.unit,
+                  );
+                  if (ok) reading.reset({ value: "", unit: values.unit });
+                })}
               >
                 Log reading
               </Button>

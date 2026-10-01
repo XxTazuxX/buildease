@@ -14,14 +14,19 @@ import {
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 import { SignaturePanel } from "@/modules/signing";
 import {
+  depositFormSchema,
+  leaseEndFormSchema,
   leaseEndReasons,
+  leaseFormSchema,
+  paymentFormSchema,
   paymentMethods,
+  refundFormSchema,
   type Lease,
   type LeaseEndReason,
-  type NewLease,
   type PaymentMethod,
 } from "../model/leases";
 import { useLeaseDetail, useLeases } from "../viewmodel/useLeases";
@@ -34,8 +39,55 @@ const emptyLease = {
   rentAmount: "",
   firstChargeOn: "",
   depositAmount: "",
-  depositHeldOn: "",
 };
+
+function EndLeaseDialog({
+  lease,
+  busy,
+  onEnd,
+  close,
+}: {
+  lease: Lease;
+  busy: boolean;
+  onEnd: (endsOn: string, reason: LeaseEndReason) => Promise<boolean>;
+  close: () => void;
+}) {
+  const form = useZodForm(leaseEndFormSchema(lease.starts_on), {
+    endsOn: lease.starts_on,
+    reason: "TERMINATED" as LeaseEndReason,
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>End lease</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField
+            label="Ends on"
+            type="date"
+            slotProps={{ inputLabel: { shrink: true } }}
+            {...form.field("endsOn")}
+          />
+          <TextField select label="Reason" {...form.field("reason")}>
+            {leaseEndReasons.map((reason) => (
+              <MenuItem key={reason} value={reason}>
+                {reason}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={form.submit(async (values) => {
+              if (await onEnd(values.endsOn, values.reason)) close();
+            })}
+          >
+            End lease
+          </Button>
+        </Stack>
+      </DialogContent>
+    </AdaptiveDialog>
+  );
+}
 
 export function LeasesPanel({
   org,
@@ -50,10 +102,8 @@ export function LeasesPanel({
 }) {
   const vm = useLeases(org, building);
   const [newLeaseOpen, setNewLeaseOpen] = useState(false);
-  const [newLease, setNewLease] = useState(emptyLease);
+  const newLease = useZodForm(leaseFormSchema, emptyLease);
   const [endingLease, setEndingLease] = useState<Lease | null>(null);
-  const [endsOn, setEndsOn] = useState("");
-  const [endReason, setEndReason] = useState<LeaseEndReason>("TERMINATED");
   const [detailLease, setDetailLease] = useState<string | null>(null);
   const error = vm.error || vm.leases.error?.message;
 
@@ -86,7 +136,7 @@ export function LeasesPanel({
           <Button
             variant="contained"
             onClick={() => {
-              setNewLease(emptyLease);
+              newLease.reset(emptyLease);
               setNewLeaseOpen(true);
             }}
           >
@@ -140,14 +190,7 @@ export function LeasesPanel({
                 </>
               )}
               {canManage && lease.status === "ACTIVE" && (
-                <Button
-                  color="warning"
-                  onClick={() => {
-                    setEndingLease(lease);
-                    setEndsOn(lease.starts_on);
-                    setEndReason("TERMINATED");
-                  }}
-                >
+                <Button color="warning" onClick={() => setEndingLease(lease)}>
                   End lease
                 </Button>
               )}
@@ -168,14 +211,7 @@ export function LeasesPanel({
         <DialogTitle>New lease</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              select
-              label="Resident"
-              value={newLease.residentId}
-              onChange={(e) =>
-                setNewLease({ ...newLease, residentId: e.target.value })
-              }
-            >
+            <TextField select label="Resident" {...newLease.field("residentId")}>
               {vm.residents.data
                 ?.filter((item) => item.active)
                 .map((item) => (
@@ -187,10 +223,7 @@ export function LeasesPanel({
             <TextField
               select
               label="Rentable space"
-              value={newLease.spaceId}
-              onChange={(e) =>
-                setNewLease({ ...newLease, spaceId: e.target.value })
-              }
+              {...newLease.field("spaceId")}
             >
               {vm.spaces.data
                 ?.filter((item) => ["VACANT", "RESERVED"].includes(item.status))
@@ -204,70 +237,40 @@ export function LeasesPanel({
               label="Starts on"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={newLease.startsOn}
-              onChange={(e) =>
-                setNewLease({ ...newLease, startsOn: e.target.value })
-              }
+              {...newLease.field("startsOn")}
             />
             <TextField
               label="Ends on (optional)"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={newLease.endsOn}
-              onChange={(e) =>
-                setNewLease({ ...newLease, endsOn: e.target.value })
-              }
+              {...newLease.field("endsOn")}
             />
             <TextField
               label="Monthly rent"
               type="number"
-              value={newLease.rentAmount}
-              onChange={(e) =>
-                setNewLease({ ...newLease, rentAmount: e.target.value })
-              }
+              {...newLease.field("rentAmount")}
             />
             <TextField
               label="First charge on"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={newLease.firstChargeOn}
-              onChange={(e) =>
-                setNewLease({ ...newLease, firstChargeOn: e.target.value })
-              }
+              {...newLease.field("firstChargeOn")}
             />
             <TextField
               label="Deposit amount (optional)"
               type="number"
-              value={newLease.depositAmount}
-              onChange={(e) =>
-                setNewLease({ ...newLease, depositAmount: e.target.value })
-              }
+              {...newLease.field("depositAmount")}
             />
             <Button
               variant="contained"
-              disabled={
-                vm.busy ||
-                !newLease.residentId ||
-                !newLease.spaceId ||
-                !newLease.startsOn ||
-                !newLease.rentAmount ||
-                !newLease.firstChargeOn
-              }
-              onClick={() => {
-                const body: NewLease = {
-                  residentId: newLease.residentId,
-                  spaceId: newLease.spaceId,
-                  startsOn: newLease.startsOn,
-                  endsOn: newLease.endsOn || undefined,
-                  rentAmount: Number(newLease.rentAmount),
-                  firstChargeOn: newLease.firstChargeOn,
-                  depositAmount: newLease.depositAmount
-                    ? Number(newLease.depositAmount)
-                    : undefined,
-                  depositHeldOn: newLease.startsOn,
-                };
-                void vm.create(body).then((ok) => ok && setNewLeaseOpen(false));
-              }}
+              disabled={vm.busy}
+              onClick={newLease.submit(async (values) => {
+                const ok = await vm.create({
+                  ...values,
+                  depositHeldOn: values.startsOn,
+                });
+                if (ok) setNewLeaseOpen(false);
+              })}
             >
               Create lease
             </Button>
@@ -276,48 +279,12 @@ export function LeasesPanel({
       </AdaptiveDialog>
 
       {endingLease && (
-        <AdaptiveDialog
-          open
-          onClose={() => setEndingLease(null)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>End lease</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                label="Ends on"
-                type="date"
-                slotProps={{ inputLabel: { shrink: true } }}
-                value={endsOn}
-                onChange={(e) => setEndsOn(e.target.value)}
-              />
-              <TextField
-                select
-                label="Reason"
-                value={endReason}
-                onChange={(e) => setEndReason(e.target.value as LeaseEndReason)}
-              >
-                {leaseEndReasons.map((reason) => (
-                  <MenuItem key={reason} value={reason}>
-                    {reason}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <Button
-                variant="contained"
-                disabled={vm.busy || !endsOn}
-                onClick={() =>
-                  void vm
-                    .end(endingLease.id, endsOn, endReason)
-                    .then((ok) => ok && setEndingLease(null))
-                }
-              >
-                End lease
-              </Button>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+        <EndLeaseDialog
+          lease={endingLease}
+          busy={vm.busy}
+          close={() => setEndingLease(null)}
+          onEnd={(endsOn, reason) => vm.end(endingLease.id, endsOn, reason)}
+        />
       )}
 
       {detailLease && (
@@ -352,13 +319,16 @@ function LeaseDetailDialog({
   const auth = useAuth();
   const detail = useLeaseDetail(org, building, lease);
   const vm = useLeases(org, building);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [paymentReceivedOn, setPaymentReceivedOn] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [depositHeldOn, setDepositHeldOn] = useState("");
-  const [refundAmount, setRefundAmount] = useState("");
-  const [refundedOn, setRefundedOn] = useState("");
+  const payment = useZodForm(paymentFormSchema, {
+    amount: "",
+    method: "CASH" as PaymentMethod,
+    receivedOn: "",
+  });
+  const deposit = useZodForm(depositFormSchema, { amount: "", heldOn: "" });
+  const refund = useZodForm(
+    refundFormSchema(Number(detail.data?.deposit?.amount ?? 0)),
+    { refundedAmount: "", refundedOn: "" },
+  );
 
   return (
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
@@ -413,17 +383,9 @@ function LeaseDetailDialog({
                 <TextField
                   label="Amount"
                   type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  {...payment.field("amount")}
                 />
-                <TextField
-                  select
-                  label="Method"
-                  value={paymentMethod}
-                  onChange={(e) =>
-                    setPaymentMethod(e.target.value as PaymentMethod)
-                  }
-                >
+                <TextField select label="Method" {...payment.field("method")}>
                   {paymentMethods.map((method) => (
                     <MenuItem key={method} value={method}>
                       {method}
@@ -434,26 +396,20 @@ function LeaseDetailDialog({
                   label="Received on"
                   type="date"
                   slotProps={{ inputLabel: { shrink: true } }}
-                  value={paymentReceivedOn}
-                  onChange={(e) => setPaymentReceivedOn(e.target.value)}
+                  {...payment.field("receivedOn")}
                 />
                 <Button
                   variant="contained"
-                  disabled={vm.busy || !paymentAmount || !paymentReceivedOn}
-                  onClick={() =>
-                    void vm
-                      .recordPayment(lease, {
-                        amount: Number(paymentAmount),
-                        method: paymentMethod,
-                        receivedOn: paymentReceivedOn,
-                      })
-                      .then((ok) => {
-                        if (ok) {
-                          setPaymentAmount("");
-                          setPaymentReceivedOn("");
-                        }
-                      })
-                  }
+                  disabled={vm.busy}
+                  onClick={payment.submit(async (values) => {
+                    const ok = await vm.recordPayment(lease, values);
+                    if (ok)
+                      payment.reset({
+                        amount: "",
+                        method: values.method,
+                        receivedOn: "",
+                      });
+                  })}
                 >
                   Record payment
                 </Button>
@@ -468,25 +424,20 @@ function LeaseDetailDialog({
                 <TextField
                   label="Deposit amount"
                   type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
+                  {...deposit.field("amount")}
                 />
                 <TextField
                   label="Held on"
                   type="date"
                   slotProps={{ inputLabel: { shrink: true } }}
-                  value={depositHeldOn}
-                  onChange={(e) => setDepositHeldOn(e.target.value)}
+                  {...deposit.field("heldOn")}
                 />
                 <Button
                   variant="outlined"
-                  disabled={vm.busy || !depositAmount || !depositHeldOn}
-                  onClick={() =>
-                    void vm.recordDeposit(lease, {
-                      amount: Number(depositAmount),
-                      heldOn: depositHeldOn,
-                    })
-                  }
+                  disabled={vm.busy}
+                  onClick={deposit.submit((values) =>
+                    vm.recordDeposit(lease, values),
+                  )}
                 >
                   Record deposit
                 </Button>
@@ -508,26 +459,21 @@ function LeaseDetailDialog({
                     <TextField
                       label="Refund amount"
                       type="number"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
+                      {...refund.field("refundedAmount")}
                     />
                     <TextField
                       label="Refunded on"
                       type="date"
                       slotProps={{ inputLabel: { shrink: true } }}
-                      value={refundedOn}
-                      onChange={(e) => setRefundedOn(e.target.value)}
+                      {...refund.field("refundedOn")}
                     />
                     <Stack direction="row" spacing={1}>
                       <Button
                         variant="outlined"
-                        disabled={vm.busy || !refundAmount || !refundedOn}
-                        onClick={() =>
-                          void vm.refundDeposit(lease, {
-                            refundedOn,
-                            refundedAmount: Number(refundAmount),
-                          })
-                        }
+                        disabled={vm.busy}
+                        onClick={refund.submit((values) =>
+                          vm.refundDeposit(lease, values),
+                        )}
                       >
                         Refund deposit
                       </Button>

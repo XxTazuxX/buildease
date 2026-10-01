@@ -190,7 +190,7 @@ export function LoginPage({
             },
           }}
         >
-          <Stack component="form" onSubmit={submit} spacing={2.5}>
+          <Stack component="form" noValidate onSubmit={submit} spacing={2.5}>
             {error && <Alert severity="error">{error}</Alert>}
             <TextField
               label="Email"
@@ -206,6 +206,8 @@ export function LoginPage({
               type="password"
               autoComplete="current-password"
               {...form.register("password")}
+              error={!!form.formState.errors.password}
+              helperText={form.formState.errors.password?.message}
             />
             <Button
               type="submit"
@@ -269,7 +271,7 @@ export function ChangePasswordPage() {
             },
           }}
         >
-          <Stack component="form" onSubmit={submit} spacing={2.25}>
+          <Stack component="form" noValidate onSubmit={submit} spacing={2.25}>
             {error && <Alert severity="error">{error}</Alert>}
             {(["oldPassword", "newPassword", "confirmPassword"] as const).map(
               (key, i) => (

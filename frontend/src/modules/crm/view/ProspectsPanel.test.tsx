@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { ProspectsPanel } from "./ProspectsPanel";
@@ -65,12 +65,46 @@ it("moves a prospect to a new status", async () => {
   expect(updateStatus).toHaveBeenCalledWith("prospect-1", "REJECTED");
 });
 
+const leaseUuid = "11111111-1111-4111-8111-111111111111";
+
 it("links an approved prospect to a lease", async () => {
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Lease ID"), leaseUuid);
+  await user.click(screen.getByRole("button", { name: "Link lease" }));
+  await waitFor(() =>
+    expect(linkLease).toHaveBeenCalledWith("prospect-1", leaseUuid),
+  );
+});
+
+it("rejects a lease ID that is not a UUID", async () => {
   render(<ProspectsPanel org="org" building="building" />);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Lease ID"), "lease-1");
   await user.click(screen.getByRole("button", { name: "Link lease" }));
-  expect(linkLease).toHaveBeenCalledWith("prospect-1", "lease-1");
+  expect(await screen.findByText("Enter a valid lease ID")).toBeInTheDocument();
+  expect(linkLease).not.toHaveBeenCalled();
+});
+
+it("blocks a new prospect without a space or name and flags a bad email", async () => {
+  const create = vi.fn().mockResolvedValue(true);
+  vi.mocked(useProspects).mockReturnValue({
+    ...vi.mocked(useProspects)("org", "building"),
+    create,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "New prospect" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.type(within(dialog).getByLabelText("Email (optional)"), "nope");
+  await user.click(within(dialog).getByRole("button", { name: "Add prospect" }));
+  expect(await within(dialog).findByText("Select a space")).toBeInTheDocument();
+  expect(within(dialog).getByText("Required")).toBeInTheDocument();
+  expect(
+    within(dialog).getByText("Enter a valid email address"),
+  ).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
 });
 
 it("opens the screening dialog for a prospect", async () => {

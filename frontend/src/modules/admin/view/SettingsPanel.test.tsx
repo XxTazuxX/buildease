@@ -66,6 +66,47 @@ it("saves settings with an empty password when the admin leaves it untouched", a
   );
 });
 
+it("blocks an out-of-range port and shows the error on the Port field", async () => {
+  render(<SettingsPanel />);
+  const user = userEvent.setup();
+  const port = screen.getByLabelText("Port");
+  await user.clear(port);
+  await user.type(port, "70000");
+  await user.click(screen.getByRole("button", { name: "Save settings" }));
+  expect(await screen.findByText("Must be at most 65535")).toBeInTheDocument();
+  expect(updateMail).not.toHaveBeenCalled();
+});
+
+it("requires a valid test recipient before sending", async () => {
+  const sendTest = vi.fn();
+  vi.mocked(useMailSettings).mockReturnValue({
+    query: { data: mailData, error: null },
+    action: { error: "", busy: false },
+    update: updateMail,
+    sendTest,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<SettingsPanel />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Send test" }));
+  expect(await screen.findByText("Required")).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Recipient"), "bad");
+  await user.click(screen.getByRole("button", { name: "Send test" }));
+  expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
+  expect(sendTest).not.toHaveBeenCalled();
+});
+
+it("requires a template subject and body", async () => {
+  render(<SettingsPanel />);
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+  const dialog = screen.getByRole("dialog");
+  await user.clear(within(dialog).getByLabelText("Subject"));
+  await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(updateTemplate).not.toHaveBeenCalled();
+});
+
 it("previews {{link}} substitution locally without a network call", async () => {
   render(<SettingsPanel />);
   const user = userEvent.setup();

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Alert,
   Button,
@@ -7,7 +6,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type { OnboardingMode } from "../model/onboarding";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import { onboardingSchema, type OnboardingMode } from "../model/onboarding";
 import { useOnboarding } from "../viewmodel/useOnboarding";
 
 export function OnboardingForm({
@@ -19,7 +19,7 @@ export function OnboardingForm({
 }) {
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const { message, error, busy, submit } = useOnboarding(mode, token);
-  const [values, setValues] = useState({
+  const form = useZodForm(onboardingSchema(mode), {
     email: "",
     displayName: "",
     organizationName: "",
@@ -60,25 +60,15 @@ export function OnboardingForm({
             label="Email"
             type="email"
             autoComplete="email"
-            value={values.email}
-            onChange={(e) => setValues({ ...values, email: e.target.value })}
+            {...form.field("email")}
           />
         )}
         {mode === "register" && (
           <>
-            <TextField
-              label="Your name"
-              value={values.displayName}
-              onChange={(e) =>
-                setValues({ ...values, displayName: e.target.value })
-              }
-            />
+            <TextField label="Your name" {...form.field("displayName")} />
             <TextField
               label="Organization name"
-              value={values.organizationName}
-              onChange={(e) =>
-                setValues({ ...values, organizationName: e.target.value })
-              }
+              {...form.field("organizationName")}
             />
           </>
         )}
@@ -87,9 +77,8 @@ export function OnboardingForm({
             label={mode === "register" ? "Password" : "New password"}
             type="password"
             autoComplete="new-password"
-            helperText="Use 15–64 characters"
-            value={values.password}
-            onChange={(e) => setValues({ ...values, password: e.target.value })}
+            {...form.field("password")}
+            helperText={form.error("password") ?? "Use 15–64 characters"}
           />
         )}
         {mode !== "verify" && !message && (
@@ -97,7 +86,7 @@ export function OnboardingForm({
             variant="contained"
             size="large"
             disabled={busy || (mode === "reset" && !token)}
-            onClick={() => void submit(values)}
+            onClick={form.submit((values) => submit(values))}
           >
             {busy ? "Please wait…" : "Continue"}
           </Button>

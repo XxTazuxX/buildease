@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalInteger,
+  optionalMoney,
+  optionalPattern,
+  optionalText,
+  requiredPattern,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const spaceTypes = [
   "FLAT",
@@ -64,7 +73,10 @@ export const configurationSchema = z.object({
   city: z.string().trim().max(100),
   region: z.string().trim().max(100),
   postalCode: z.string().trim().max(24),
-  countryCode: z.union([z.literal(""), z.string().trim().length(2)]),
+  countryCode: z
+    .union([z.literal(""), z.string().trim().length(2)])
+    .optional()
+    .transform((value) => (value === "" ? undefined : value)),
   timezone: z.string().trim().min(1).max(64),
   currency: z.string().trim().length(3),
   emergencyContact: z.string().trim().max(160),
@@ -72,6 +84,53 @@ export const configurationSchema = z.object({
   lateFeeGraceDays: z.coerce.number().int().min(0).max(90),
 });
 export type BuildingConfiguration = z.infer<typeof configurationSchema>;
+
+const CODE = /^[A-Za-z0-9_-]{1,40}$/;
+const CODE_MESSAGE = "Use 1–40 letters, digits, hyphens or underscores";
+
+export const configurationFormSchema = z.object({
+  name: requiredText(120),
+  addressLine1: optionalText(160),
+  addressLine2: optionalText(160),
+  city: optionalText(100),
+  region: optionalText(100),
+  postalCode: optionalText(24),
+  countryCode: optionalPattern(
+    /^[A-Za-z]{2}$/,
+    "Use a 2-letter country code",
+  ).transform((value) => (value === "" ? undefined : value)),
+  timezone: requiredText(64),
+  currency: requiredPattern(/^[A-Za-z]{3}$/, "Use a 3-letter currency code"),
+  emergencyContact: optionalText(160),
+  lateFeeAmount: optionalMoney().transform((value) => value ?? null),
+  lateFeeGraceDays: optionalInteger({ min: 0, max: 90 }).transform(
+    (value) => value ?? 0,
+  ),
+});
+
+export const levelFormSchema = z.object({
+  name: requiredText(120),
+  code: requiredPattern(CODE, CODE_MESSAGE),
+  sortOrder: optionalInteger({ min: -1000, max: 1000 }).transform(
+    (value) => value ?? 0,
+  ),
+});
+
+export const spaceFormSchema = z.object({
+  name: requiredText(120),
+  code: requiredPattern(CODE, CODE_MESSAGE),
+  type: enumChoice(spaceTypes),
+  levelId: z.string().transform((value) => value || null),
+  parentSpaceId: z.string().transform((value) => value || null),
+  rentable: z.boolean(),
+  area: optionalMoney({ min: 0.01, integerDigits: 10 }).transform(
+    (value) => value ?? null,
+  ),
+  capacity: optionalInteger({ min: 1, max: 100000 }).transform(
+    (value) => value ?? null,
+  ),
+  notes: optionalText(1000),
+});
 
 export const buildingsApi = {
   profile: (org: string, building: string) =>

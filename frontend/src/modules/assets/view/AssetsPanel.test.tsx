@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { AssetsPanel } from "./AssetsPanel";
@@ -66,6 +66,86 @@ it("retires an active asset", async () => {
   render(<AssetsPanel org="org" building="building" />);
   await userEvent.setup().click(screen.getByRole("button", { name: "Retire" }));
   expect(setStatus).toHaveBeenCalledWith("asset-1", "RETIRED");
+});
+
+it("blocks an empty asset and shows the required-name error inline", async () => {
+  const create = vi.fn().mockResolvedValue(true);
+  vi.mocked(useAssets).mockReturnValue({
+    ...vi.mocked(useAssets)("org", "building"),
+    create,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<AssetsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Add asset" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Add asset" }));
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+});
+
+it("flags an over-long name and submits trimmed values once valid", async () => {
+  const create = vi.fn().mockResolvedValue(true);
+  vi.mocked(useAssets).mockReturnValue({
+    ...vi.mocked(useAssets)("org", "building"),
+    create,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<AssetsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Add asset" }));
+  const dialog = await screen.findByRole("dialog");
+  const name = within(dialog).getByLabelText("Name");
+  await user.click(name);
+  await user.paste("n".repeat(161));
+  await user.tab();
+  expect(
+    await within(dialog).findByText("Use at most 160 characters"),
+  ).toBeInTheDocument();
+  await user.clear(name);
+  await user.type(name, "  Boiler  ");
+  await user.click(within(dialog).getByRole("button", { name: "Add asset" }));
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  expect(create.mock.calls[0][0]).toMatchObject({
+    name: "Boiler",
+    category: "OTHER",
+  });
+});
+
+it("rejects a negative or over-precise meter reading", async () => {
+  vi.mocked(useAssetDetail).mockReturnValue({
+    detail: {
+      data: {
+        id: "asset-1",
+        space_id: null,
+        name: "Rooftop HVAC Unit",
+        category: "HVAC",
+        manufacturer: null,
+        model: null,
+        serial_number: null,
+        install_date: null,
+        warranty_expires_on: null,
+        status: "ACTIVE",
+        notes: null,
+        meterReadings: [],
+      },
+      isLoading: false,
+      error: null,
+    },
+    busy: false,
+    error: "",
+    recordMeterReading,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<AssetsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "View" }));
+  await user.type(screen.getByLabelText("Value"), "1.234");
+  await user.click(screen.getByRole("button", { name: "Log reading" }));
+  expect(
+    await screen.findByText("Use at most 2 decimal places"),
+  ).toBeInTheDocument();
+  expect(recordMeterReading).not.toHaveBeenCalled();
 });
 
 it("opens the detail dialog and logs a meter reading", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import { requiredEmail } from "@/shared/forms/rules";
 export const passwordSchema = z
   .string()
   .refine(
@@ -11,18 +12,28 @@ export const passwordSchema = z
     "Use at most 72 UTF-8 bytes",
   );
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(1, "Enter your password"),
+  email: requiredEmail(),
+  password: z
+    .string()
+    .min(1, "Enter your password")
+    .max(256, "Use at most 256 characters"),
 });
 export const changeSchema = z
   .object({
-    oldPassword: z.string().min(1),
+    oldPassword: z
+      .string()
+      .min(1, "Enter your current password")
+      .max(256, "Use at most 256 characters"),
     newPassword: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((v) => v.newPassword === v.confirmPassword, {
     path: ["confirmPassword"],
     message: "Passwords must match",
+  })
+  .refine((v) => v.newPassword !== v.oldPassword, {
+    path: ["newPassword"],
+    message: "Choose a different password",
   });
 export interface Membership {
   organization_id: string;

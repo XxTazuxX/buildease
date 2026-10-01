@@ -8,6 +8,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  FormHelperText,
   Paper,
   Stack,
   Tab,
@@ -19,7 +20,12 @@ import { useSearchParams } from "react-router-dom";
 import { AnnouncementsPanel } from "@/modules/announcements";
 import { OccupancyPanel } from "@/modules/occupancy";
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
-import { roles, type Member, type Role } from "@/modules/admin/model/admin";
+import {
+  memberProfileSchema,
+  roles,
+  type Member,
+  type Role,
+} from "@/modules/admin/model/admin";
 import {
   useAction,
   useAdminCommands,
@@ -30,7 +36,45 @@ import { FieldsForm } from "@/shared/components/FieldsForm";
 import { Pager } from "@/shared/components/Pager";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { PageHeader, StatusChip } from "@/shared/components/Surface";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { AuditLogPanel } from "@/modules/admin/view/AuditLogPanel";
+
+function MemberProfileDialog({
+  member,
+  busy,
+  onSave,
+  close,
+}: {
+  member: Member;
+  busy: boolean;
+  onSave: (displayName: string) => Promise<unknown>;
+  close: () => void;
+}) {
+  const form = useZodForm(memberProfileSchema, {
+    displayName: member.display_name,
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>Edit organization member</DialogTitle>
+      <Divider />
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField label="Display name" {...form.field("displayName")} />
+          <Typography variant="body2" color="text.secondary">
+            {member.email}
+          </Typography>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={form.submit((values) => onSave(values.displayName))}
+          >
+            Save member
+          </Button>
+        </Stack>
+      </DialogContent>
+    </AdaptiveDialog>
+  );
+}
 
 function RoleDialog({
   org,
@@ -114,15 +158,13 @@ export function PeoplePage({
   const [makeOwner, setMakeOwner] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(["TENANT"]);
   const [editingRoles, setEditingRoles] = useState<Member | null>(null);
-  const [editingProfile, setEditingProfile] = useState<{
-    member: Member;
-    name: string;
-  } | null>(null);
+  const [editingProfile, setEditingProfile] = useState<Member | null>(null);
   const vm = useWorkspace(org, building, page);
   const action = useAction();
   const commands = useAdminCommands();
   const owner = !!vm.access.data?.owner;
   const canManage = !!vm.canManage;
+  const rolesMissing = !owner && selectedRoles.length === 0;
   const selectTab = (value: string) => {
     const next = new URLSearchParams(params);
     next.set("tab", value);
@@ -205,14 +247,7 @@ export function PeoplePage({
                           />
                         )}
                         {owner && (
-                          <Button
-                            onClick={() =>
-                              setEditingProfile({
-                                member,
-                                name: member.display_name,
-                              })
-                            }
-                          >
+                          <Button onClick={() => setEditingProfile(member)}>
                             Edit
                           </Button>
                         )}
@@ -319,11 +354,19 @@ export function PeoplePage({
                   }
                 />
               ))}
+            {rolesMissing && (
+              <FormHelperText error>Select at least one role</FormHelperText>
+            )}
           </Box>
           <FieldsForm
             fields={[
               { name: "name", label: "Member name", max: 120 },
-              { name: "email", label: "Member email", type: "email" },
+              {
+                name: "email",
+                label: "Member email",
+                type: "email",
+                max: 254,
+              },
               {
                 name: "temporaryPassword",
                 label: "Temporary password (new accounts only)",
@@ -333,6 +376,7 @@ export function PeoplePage({
               },
             ]}
             onSubmit={async (values) => {
+              if (rolesMissing) throw new Error("Select at least one role");
               await commands.invite(org, {
                 ...values,
                 owner: owner && makeOwner,
@@ -347,49 +391,21 @@ export function PeoplePage({
       </AdaptiveDialog>
 
       {editingProfile && (
-        <AdaptiveDialog
-          open
-          onClose={() => setEditingProfile(null)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>Edit organization member</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                label="Display name"
-                value={editingProfile.name}
-                onChange={(event) =>
-                  setEditingProfile({
-                    ...editingProfile,
-                    name: event.target.value,
-                  })
-                }
-                slotProps={{ htmlInput: { maxLength: 120 } }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                {editingProfile.member.email}
-              </Typography>
-              <Button
-                variant="contained"
-                disabled={action.busy || !editingProfile.name.trim()}
-                onClick={() =>
-                  void action.run(async () => {
-                    await commands.updateMember(
-                      org,
-                      editingProfile.member.account_id,
-                      editingProfile.name,
-                    );
-                    setEditingProfile(null);
-                  })
-                }
-              >
-                Save member
-              </Button>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+        <MemberProfileDialog
+          member={editingProfile}
+          busy={action.busy}
+          close={() => setEditingProfile(null)}
+          onSave={(displayName) =>
+            action.run(async () => {
+              await commands.updateMember(
+                org,
+                editingProfile.account_id,
+                displayName,
+              );
+              setEditingProfile(null);
+            })
+          }
+        />
       )}
       {editingRoles && (
         <RoleDialog

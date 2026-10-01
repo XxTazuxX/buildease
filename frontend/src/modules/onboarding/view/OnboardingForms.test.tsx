@@ -41,6 +41,44 @@ it("collects registration details and submits them", async () => {
   });
 });
 
+it("blocks a registration with an invalid email, blank names and a short password", async () => {
+  const submit = vi.fn();
+  vi.mocked(useOnboarding).mockReturnValue({
+    message: "",
+    error: "",
+    busy: false,
+    submit,
+  });
+  render(<OnboardingForm mode="register" back={vi.fn()} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Email"), "nope");
+  await user.type(screen.getByLabelText("Password"), "short");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
+  expect(screen.getAllByText("Required")).toHaveLength(2);
+  expect(
+    screen.getByText("Use 15–64 characters, at most 72 UTF-8 bytes"),
+  ).toBeInTheDocument();
+  expect(submit).not.toHaveBeenCalled();
+});
+
+it("only asks for an email when recovering an account", async () => {
+  const submit = vi.fn();
+  vi.mocked(useOnboarding).mockReturnValue({
+    message: "",
+    error: "",
+    busy: false,
+    submit,
+  });
+  render(<OnboardingForm mode="forgot" back={vi.fn()} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(await screen.findByText("Required")).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Email"), "owner@example.test");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+});
+
 it("disables continue for a reset without a token and hides it once a message arrives", () => {
   vi.mocked(useOnboarding).mockReturnValue({
     message: "",

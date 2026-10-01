@@ -14,8 +14,14 @@ import {
   Typography,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { useMailSettings, useEmailTemplates } from "../viewmodel/useAdmin";
-import type { EmailTemplate } from "../model/admin";
+import {
+  emailTemplateSchema,
+  mailSettingsSchema,
+  mailTestSchema,
+  type EmailTemplate,
+} from "../model/admin";
 
 const templateLabels: Record<EmailTemplate["template_key"], string> = {
   VERIFICATION: "Verification email",
@@ -25,29 +31,33 @@ const templateLabels: Record<EmailTemplate["template_key"], string> = {
 export function SettingsPanel() {
   const mail = useMailSettings();
   const templates = useEmailTemplates();
-  const [form, setForm] = useState({
+  const form = useZodForm(mailSettingsSchema, {
     host: "",
-    port: 587,
+    port: "587",
     username: "",
     password: "",
     from: "",
     starttls: true,
   });
-  const [testEmail, setTestEmail] = useState("");
+  const testForm = useZodForm(mailTestSchema, { recipient: "" });
   const [editing, setEditing] = useState<EmailTemplate | null>(null);
-  const [templateForm, setTemplateForm] = useState({ subject: "", body: "" });
+  const templateForm = useZodForm(emailTemplateSchema, {
+    subject: "",
+    body: "",
+  });
+  const { reset: resetForm } = form;
 
   useEffect(() => {
     if (!mail.query.data) return;
-    setForm({
+    resetForm({
       host: mail.query.data.host ?? "",
-      port: mail.query.data.port,
+      port: String(mail.query.data.port),
       username: mail.query.data.username ?? "",
       password: "",
       from: mail.query.data.from_address ?? "",
       starttls: mail.query.data.starttls,
     });
-  }, [mail.query.data]);
+  }, [mail.query.data, resetForm]);
 
   return (
     <Stack spacing={3}>
@@ -65,41 +75,23 @@ export function SettingsPanel() {
           </Alert>
         )}
         <Stack spacing={2} sx={{ mt: 2, maxWidth: 480 }}>
-          <TextField
-            label="SMTP host"
-            value={form.host}
-            onChange={(e) => setForm({ ...form, host: e.target.value })}
-          />
-          <TextField
-            label="Port"
-            type="number"
-            value={form.port}
-            onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-          />
-          <TextField
-            label="Username"
-            value={form.username}
-            onChange={(e) => setForm({ ...form, username: e.target.value })}
-          />
+          <TextField label="SMTP host" {...form.field("host")} />
+          <TextField label="Port" type="number" {...form.field("port")} />
+          <TextField label="Username" {...form.field("username")} />
           <TextField
             label="Password"
             type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            helperText="Leave blank to keep the current password."
+            {...form.field("password")}
+            helperText={
+              form.error("password") ?? "Leave blank to keep the current password."
+            }
           />
-          <TextField
-            label="From address"
-            value={form.from}
-            onChange={(e) => setForm({ ...form, from: e.target.value })}
-          />
+          <TextField label="From address" {...form.field("from")} />
           <FormControlLabel
             control={
               <Checkbox
-                checked={form.starttls}
-                onChange={(_, checked) =>
-                  setForm({ ...form, starttls: checked })
-                }
+                checked={form.values.starttls}
+                onChange={(_, checked) => form.setValue("starttls", checked)}
               />
             }
             label="Use STARTTLS"
@@ -107,23 +99,28 @@ export function SettingsPanel() {
           <Button
             variant="contained"
             disabled={mail.action.busy}
-            onClick={() => void mail.update(form)}
+            onClick={form.submit((values) => mail.update(values))}
           >
             Save settings
           </Button>
           <Divider />
           <Typography variant="subtitle2">Send a test email</Typography>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
             <TextField
               label="Recipient"
-              value={testEmail}
-              onChange={(e) => setTestEmail(e.target.value)}
+              {...testForm.field("recipient")}
               sx={{ flexGrow: 1 }}
             />
             <Button
               variant="outlined"
-              disabled={mail.action.busy || !testEmail}
-              onClick={() => void mail.sendTest(testEmail)}
+              disabled={mail.action.busy}
+              onClick={testForm.submit((values) =>
+                mail.sendTest(values.recipient),
+              )}
             >
               Send test
             </Button>
@@ -158,7 +155,7 @@ export function SettingsPanel() {
                 <Button
                   onClick={() => {
                     setEditing(t);
-                    setTemplateForm({ subject: t.subject, body: t.body });
+                    templateForm.reset({ subject: t.subject, body: t.body });
                   }}
                 >
                   Edit
@@ -179,27 +176,21 @@ export function SettingsPanel() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Subject"
-              value={templateForm.subject}
-              onChange={(e) =>
-                setTemplateForm({ ...templateForm, subject: e.target.value })
-              }
-            />
+            <TextField label="Subject" {...templateForm.field("subject")} />
             <TextField
               label="Body"
               multiline
               minRows={6}
-              value={templateForm.body}
-              onChange={(e) =>
-                setTemplateForm({ ...templateForm, body: e.target.value })
+              {...templateForm.field("body")}
+              helperText={
+                templateForm.error("body") ??
+                "Use {{link}} where the verification/reset link should appear."
               }
-              helperText="Use {{link}} where the verification/reset link should appear."
             />
             <Divider />
             <Typography variant="subtitle2">Preview</Typography>
             <Paper variant="outlined" sx={{ p: 2, whiteSpace: "pre-wrap" }}>
-              {templateForm.body.replaceAll(
+              {templateForm.values.body.replaceAll(
                 "{{link}}",
                 "https://example.com/verify?token=sample-token",
               )}
@@ -207,15 +198,14 @@ export function SettingsPanel() {
             <Button
               variant="contained"
               disabled={templates.action.busy}
-              onClick={() =>
-                void templates
-                  .update(
-                    editing!.template_key,
-                    templateForm.subject,
-                    templateForm.body,
-                  )
-                  .then((ok) => ok && setEditing(null))
-              }
+              onClick={templateForm.submit(async (values) => {
+                const ok = await templates.update(
+                  editing!.template_key,
+                  values.subject,
+                  values.body,
+                );
+                if (ok) setEditing(null);
+              })}
             >
               Save changes
             </Button>

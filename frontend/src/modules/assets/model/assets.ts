@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalDate,
+  optionalText,
+  requiredMoney,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const assetCategories = [
   "HVAC",
@@ -50,16 +57,21 @@ export interface AssetDetail {
 
 export const assetSchema = z.object({
   spaceId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  name: z.string().trim().min(1).max(160),
-  category: z.enum(assetCategories),
-  manufacturer: z.string().trim().max(120).optional(),
-  model: z.string().trim().max(120).optional(),
-  serialNumber: z.string().trim().max(120).optional(),
-  installDate: z.string().optional(),
-  warrantyExpiresOn: z.string().optional(),
-  notes: z.string().trim().max(2000).optional(),
+  name: requiredText(160),
+  category: enumChoice(assetCategories),
+  manufacturer: optionalText(120).optional(),
+  model: optionalText(120).optional(),
+  serialNumber: optionalText(120).optional(),
+  installDate: optionalDate().optional(),
+  warrantyExpiresOn: optionalDate().optional(),
+  notes: optionalText(2000).optional(),
 });
 export type NewAsset = z.infer<typeof assetSchema>;
+
+export const meterReadingSchema = z.object({
+  value: requiredMoney(),
+  unit: requiredText(24),
+});
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/assets`;

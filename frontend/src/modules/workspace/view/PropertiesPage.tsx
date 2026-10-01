@@ -77,7 +77,14 @@ export function PropertiesPage({
             <FieldsForm
               fields={[
                 { name: "name", label: "Building name", max: 120 },
-                { name: "code", label: "Building code", max: 40 },
+                {
+                  name: "code",
+                  label: "Building code",
+                  max: 40,
+                  pattern: /^[A-Za-z0-9_-]{1,40}$/,
+                  patternMessage:
+                    "Use letters, digits, hyphens or underscores only",
+                },
               ]}
               onSubmit={async (values) => {
                 await commands.createBuilding(org, values);

@@ -14,9 +14,37 @@ import {
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { ScreeningDialog } from "@/modules/screening";
-import { prospectStatuses, type ProspectStatus } from "../model/prospects";
+import {
+  linkLeaseSchema,
+  newProspectSchema,
+  prospectStatuses,
+  type ProspectStatus,
+} from "../model/prospects";
 import { useProspects, useProspectSpaces } from "../viewmodel/useProspects";
+
+function LinkLeaseForm({
+  busy,
+  onLink,
+}: {
+  busy: boolean;
+  onLink: (leaseId: string) => Promise<unknown>;
+}) {
+  const form = useZodForm(linkLeaseSchema, { leaseId: "" });
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+      <TextField size="small" label="Lease ID" {...form.field("leaseId")} />
+      <Button
+        size="small"
+        disabled={busy}
+        onClick={form.submit((values) => onLink(values.leaseId))}
+      >
+        Link lease
+      </Button>
+    </Stack>
+  );
+}
 
 const terminalStatuses: ProspectStatus[] = ["LEASED", "REJECTED", "WITHDRAWN"];
 const screenableStatuses: ProspectStatus[] = [
@@ -45,8 +73,7 @@ export function ProspectsPanel({
   const vm = useProspects(org, building, filter || undefined);
   const spaces = useProspectSpaces(org, building);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(emptyProspect);
-  const [leaseIds, setLeaseIds] = useState<Record<string, string>>({});
+  const form = useZodForm(newProspectSchema, emptyProspect);
   const [screeningProspect, setScreeningProspect] = useState<{
     id: string;
     name: string;
@@ -78,7 +105,7 @@ export function ProspectsPanel({
         <Button
           variant="contained"
           onClick={() => {
-            setForm(emptyProspect);
+            form.reset(emptyProspect);
             setCreateOpen(true);
           }}
         >
@@ -162,25 +189,10 @@ export function ProspectsPanel({
                   </Button>
                 )}
                 {item.status === "APPROVED" && (
-                  <Stack direction="row" spacing={1}>
-                    <TextField
-                      size="small"
-                      label="Lease ID"
-                      value={leaseIds[item.id] ?? ""}
-                      onChange={(e) =>
-                        setLeaseIds({ ...leaseIds, [item.id]: e.target.value })
-                      }
-                    />
-                    <Button
-                      size="small"
-                      disabled={vm.busy || !leaseIds[item.id]}
-                      onClick={() =>
-                        void vm.linkLease(item.id, leaseIds[item.id])
-                      }
-                    >
-                      Link lease
-                    </Button>
-                  </Stack>
+                  <LinkLeaseForm
+                    busy={vm.busy}
+                    onLink={(leaseId) => vm.linkLease(item.id, leaseId)}
+                  />
                 )}
               </Stack>
             </Paper>
@@ -201,12 +213,7 @@ export function ProspectsPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              select
-              label="Space"
-              value={form.spaceId}
-              onChange={(e) => setForm({ ...form, spaceId: e.target.value })}
-            >
+            <TextField select label="Space" {...form.field("spaceId")}>
               {spaces.data
                 ?.filter((item) => ["VACANT", "RESERVED"].includes(item.status))
                 .map((item) => (
@@ -215,34 +222,21 @@ export function ProspectsPanel({
                   </MenuItem>
                 ))}
             </TextField>
-            <TextField
-              label="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <TextField
-              label="Email (optional)"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-            <TextField
-              label="Phone (optional)"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
+            <TextField label="Name" {...form.field("name")} />
+            <TextField label="Email (optional)" {...form.field("email")} />
+            <TextField label="Phone (optional)" {...form.field("phone")} />
             <TextField
               label="Notes (optional)"
               multiline
               minRows={2}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              {...form.field("notes")}
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !form.spaceId || !form.name.trim()}
-              onClick={() =>
-                void vm.create(form).then((ok) => ok && setCreateOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={form.submit(async (values) => {
+                if (await vm.create(values)) setCreateOpen(false);
+              })}
             >
               Add prospect
             </Button>

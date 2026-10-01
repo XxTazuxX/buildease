@@ -1,4 +1,11 @@
+import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import {
+  optionalText,
+  requiredEmail,
+  requiredInteger,
+  requiredText,
+} from "@/shared/forms/rules";
 export const roles = [
   "PROPERTY_MANAGER",
   "ACCOUNTANT",
@@ -44,6 +51,26 @@ export interface MailSettings {
   from_address: string | null;
   starttls: boolean;
 }
+export const memberProfileSchema = z.object({
+  displayName: requiredText(120),
+});
+
+export const mailSettingsSchema = z.object({
+  host: optionalText(255),
+  port: requiredInteger({ min: 1, max: 65535 }),
+  username: optionalText(255),
+  password: z.string().max(500, "Use at most 500 characters"),
+  from: optionalText(254),
+  starttls: z.boolean(),
+});
+
+export const mailTestSchema = z.object({ recipient: requiredEmail() });
+
+export const emailTemplateSchema = z.object({
+  subject: requiredText(200),
+  body: requiredText(4000),
+});
+
 export const emailTemplateKeys = ["VERIFICATION", "PASSWORD_RESET"] as const;
 export type EmailTemplateKey = (typeof emailTemplateKeys)[number];
 export interface EmailTemplate {

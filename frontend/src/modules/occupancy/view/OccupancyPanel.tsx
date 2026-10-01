@@ -14,9 +14,79 @@ import {
   Typography,
 } from "@mui/material";
 import type { Member } from "@/modules/admin/model/admin";
+import { PromptDialog } from "@/shared/components/PromptDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
-import type { Resident } from "../model/occupancy";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  assignmentFormSchema,
+  residentFormSchema,
+  residentUpdateFormSchema,
+  type Resident,
+} from "../model/occupancy";
 import { useOccupancy } from "../viewmodel/useOccupancy";
+
+const emptyResident = { accountId: "", displayName: "", phone: "" };
+const emptyAssignment = { residentId: "", spaceId: "" };
+
+function EditResidentDialog({
+  resident,
+  busy,
+  error,
+  onSave,
+  close,
+}: {
+  resident: Resident;
+  busy: boolean;
+  error: string;
+  onSave: (values: {
+    displayName: string;
+    phone: string;
+    active: boolean;
+  }) => Promise<boolean>;
+  close: () => void;
+}) {
+  const form = useZodForm(residentUpdateFormSchema, {
+    displayName: resident.display_name,
+    phone: resident.phone ?? "",
+    active: resident.active,
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="sm">
+      <DialogTitle>Edit resident</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {error && <Alert severity="error">{error}</Alert>}
+          <TextField label="Resident name" {...form.field("displayName")} />
+          <TextField label="Phone (optional)" {...form.field("phone")} />
+          <FormControlLabel
+            label="Active resident"
+            control={
+              <Checkbox
+                checked={form.values.active}
+                onChange={(_, active) => form.setValue("active", active)}
+              />
+            }
+          />
+          {!form.values.active && resident.assignments.length > 0 && (
+            <Alert severity="info">
+              End every active space assignment before deactivating this
+              resident.
+            </Alert>
+          )}
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={form.submit(async (values) => {
+              if (await onSave(values)) close();
+            })}
+          >
+            Save resident
+          </Button>
+        </Stack>
+      </DialogContent>
+    </AdaptiveDialog>
+  );
+}
 
 export function OccupancyPanel({
   org,
@@ -30,18 +100,10 @@ export function OccupancyPanel({
   const vm = useOccupancy(org, building);
   const [residentOpen, setResidentOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const [editing, setEditing] = useState<{
-    resident: Resident;
-    displayName: string;
-    phone: string;
-    active: boolean;
-  } | null>(null);
-  const [resident, setResident] = useState({
-    accountId: "",
-    displayName: "",
-    phone: "",
-  });
-  const [assignment, setAssignment] = useState({ residentId: "", spaceId: "" });
+  const [editing, setEditing] = useState<Resident | null>(null);
+  const [householdFor, setHouseholdFor] = useState<Resident | null>(null);
+  const resident = useZodForm(residentFormSchema, emptyResident);
+  const assignment = useZodForm(assignmentFormSchema, emptyAssignment);
   const error =
     vm.error || vm.residents.error?.message || vm.spaces.error?.message;
   return (
@@ -64,10 +126,22 @@ export function OccupancyPanel({
           </Typography>
         </Box>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button variant="outlined" onClick={() => setResidentOpen(true)}>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              resident.reset(emptyResident);
+              setResidentOpen(true);
+            }}
+          >
             Add resident
           </Button>
-          <Button variant="contained" onClick={() => setAssignmentOpen(true)}>
+          <Button
+            variant="contained"
+            onClick={() => {
+              assignment.reset(emptyAssignment);
+              setAssignmentOpen(true);
+            }}
+          >
             Assign space
           </Button>
         </Stack>
@@ -135,27 +209,11 @@ export function OccupancyPanel({
               </Box>
               <Button
                 disabled={vm.busy || !item.active}
-                onClick={() => {
-                  const name = window.prompt("Household member name");
-                  if (!name?.trim()) return;
-                  const relationship =
-                    window.prompt("Relationship (optional)") ?? "";
-                  void vm.addHouseholdMember(item.id, name, relationship);
-                }}
+                onClick={() => setHouseholdFor(item)}
               >
                 Add household
               </Button>
-              <Button
-                disabled={vm.busy}
-                onClick={() =>
-                  setEditing({
-                    resident: item,
-                    displayName: item.display_name,
-                    phone: item.phone ?? "",
-                    active: item.active,
-                  })
-                }
-              >
+              <Button disabled={vm.busy} onClick={() => setEditing(item)}>
                 Edit resident
               </Button>
             </Stack>
@@ -174,16 +232,13 @@ export function OccupancyPanel({
             <TextField
               select
               label="Tenant account"
-              value={resident.accountId}
+              {...resident.field("accountId")}
               onChange={(e) => {
                 const member = members.find(
                   (item) => item.account_id === e.target.value,
                 );
-                setResident({
-                  ...resident,
-                  accountId: e.target.value,
-                  displayName: member?.display_name ?? "",
-                });
+                resident.setValue("accountId", e.target.value);
+                resident.setValue("displayName", member?.display_name ?? "");
               }}
             >
               {members
@@ -196,28 +251,15 @@ export function OccupancyPanel({
             </TextField>
             <TextField
               label="Resident name"
-              value={resident.displayName}
-              onChange={(e) =>
-                setResident({ ...resident, displayName: e.target.value })
-              }
+              {...resident.field("displayName")}
             />
-            <TextField
-              label="Phone (optional)"
-              value={resident.phone}
-              onChange={(e) =>
-                setResident({ ...resident, phone: e.target.value })
-              }
-            />
+            <TextField label="Phone (optional)" {...resident.field("phone")} />
             <Button
               variant="contained"
-              disabled={
-                vm.busy || !resident.accountId || !resident.displayName.trim()
-              }
-              onClick={() =>
-                void vm
-                  .create(resident)
-                  .then((ok) => ok && setResidentOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={resident.submit(async (values) => {
+                if (await vm.create(values)) setResidentOpen(false);
+              })}
             >
               Create resident
             </Button>
@@ -225,65 +267,40 @@ export function OccupancyPanel({
         </DialogContent>
       </AdaptiveDialog>
       {editing && (
-        <AdaptiveDialog
-          open
-          onClose={() => setEditing(null)}
-          fullWidth
-          maxWidth="sm"
-        >
-          <DialogTitle>Edit resident</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <TextField
-                label="Resident name"
-                value={editing.displayName}
-                onChange={(event) =>
-                  setEditing({ ...editing, displayName: event.target.value })
-                }
-                slotProps={{ htmlInput: { maxLength: 120 } }}
-              />
-              <TextField
-                label="Phone (optional)"
-                value={editing.phone}
-                onChange={(event) =>
-                  setEditing({ ...editing, phone: event.target.value })
-                }
-                slotProps={{ htmlInput: { maxLength: 40 } }}
-              />
-              <FormControlLabel
-                label="Active resident"
-                control={
-                  <Checkbox
-                    checked={editing.active}
-                    onChange={(_, active) => setEditing({ ...editing, active })}
-                  />
-                }
-              />
-              {!editing.active && editing.resident.assignments.length > 0 && (
-                <Alert severity="info">
-                  End every active space assignment before deactivating this
-                  resident.
-                </Alert>
-              )}
-              <Button
-                variant="contained"
-                disabled={vm.busy || !editing.displayName.trim()}
-                onClick={() =>
-                  void vm
-                    .update(editing.resident.id, {
-                      displayName: editing.displayName,
-                      phone: editing.phone,
-                      active: editing.active,
-                    })
-                    .then((ok) => ok && setEditing(null))
-                }
-              >
-                Save resident
-              </Button>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+        <EditResidentDialog
+          resident={editing}
+          busy={vm.busy}
+          error={vm.error}
+          close={() => setEditing(null)}
+          onSave={(values) => vm.update(editing.id, values)}
+        />
+      )}
+      {householdFor && (
+        <PromptDialog
+          title={`Add household member · ${householdFor.display_name}`}
+          fields={[
+            { name: "name", label: "Household member name", max: 120 },
+            {
+              name: "relationship",
+              label: "Relationship (optional)",
+              max: 60,
+              optional: true,
+            },
+          ]}
+          label="Add household member"
+          error={vm.error}
+          onClose={() => setHouseholdFor(null)}
+          onSubmit={async (values) => {
+            if (
+              await vm.addHouseholdMember(
+                householdFor.id,
+                values.name,
+                values.relationship,
+              )
+            )
+              setHouseholdFor(null);
+          }}
+        />
       )}
       <AdaptiveDialog
         open={assignmentOpen}
@@ -297,10 +314,7 @@ export function OccupancyPanel({
             <TextField
               select
               label="Resident"
-              value={assignment.residentId}
-              onChange={(e) =>
-                setAssignment({ ...assignment, residentId: e.target.value })
-              }
+              {...assignment.field("residentId")}
             >
               {vm.residents.data
                 ?.filter((item) => item.active)
@@ -313,10 +327,7 @@ export function OccupancyPanel({
             <TextField
               select
               label="Vacant space"
-              value={assignment.spaceId}
-              onChange={(e) =>
-                setAssignment({ ...assignment, spaceId: e.target.value })
-              }
+              {...assignment.field("spaceId")}
             >
               {vm.spaces.data
                 ?.filter((item) => ["VACANT", "RESERVED"].includes(item.status))
@@ -328,14 +339,11 @@ export function OccupancyPanel({
             </TextField>
             <Button
               variant="contained"
-              disabled={
-                vm.busy || !assignment.residentId || !assignment.spaceId
-              }
-              onClick={() =>
-                void vm
-                  .assign(assignment.residentId, assignment.spaceId)
-                  .then((ok) => ok && setAssignmentOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={assignment.submit(async (values) => {
+                if (await vm.assign(values.residentId, values.spaceId))
+                  setAssignmentOpen(false);
+              })}
             >
               Activate assignment
             </Button>

@@ -6,6 +6,16 @@ const signIn = vi
   .fn()
   .mockRejectedValue(new Error("Invalid credentials or session"));
 vi.mock("../viewmodel/AuthProvider", () => ({ useAuth: () => ({ signIn }) }));
+it("shows inline errors for an invalid email and a missing password without signing in", async () => {
+  signIn.mockClear();
+  render(<LoginPage />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Email"), "not-an-email");
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(await screen.findByText(/valid email/i)).toBeInTheDocument();
+  expect(screen.getByText("Enter your password")).toBeInTheDocument();
+  expect(signIn).not.toHaveBeenCalled();
+});
 it("renders an accessible login form and shows server errors without password disclosure", async () => {
   render(<LoginPage />);
   const user = userEvent.setup();
