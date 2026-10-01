@@ -16,28 +16,55 @@ import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import { ScreeningDialog } from "@/modules/screening";
+import type { Lease } from "@/modules/leases";
 import {
   linkLeaseSchema,
+  linkableLeases,
   newProspectSchema,
   prospectStatuses,
   type ProspectStatus,
 } from "../model/prospects";
-import { useProspects, useProspectSpaces } from "../viewmodel/useProspects";
+import {
+  useProspectLeases,
+  useProspects,
+  useProspectSpaces,
+} from "../viewmodel/useProspects";
 
 function LinkLeaseForm({
+  leases,
   busy,
   onLink,
 }: {
+  leases: Lease[];
   busy: boolean;
   onLink: (leaseId: string) => Promise<unknown>;
 }) {
   const form = useZodForm(linkLeaseSchema, { leaseId: "" });
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
-      <TextField size="small" label="Lease ID" {...form.field("leaseId")} />
+      <TextField
+        select
+        size="small"
+        label="Lease"
+        sx={{ minWidth: 220 }}
+        {...form.field("leaseId")}
+        helperText={
+          form.error("leaseId") ??
+          (leases.length === 0
+            ? "No draft or active lease for this space yet. Add the person as a resident, then create a lease for this space in Leases."
+            : undefined)
+        }
+      >
+        {leases.map((lease) => (
+          <MenuItem key={lease.id} value={lease.id}>
+            {lease.status} · {lease.rent_amount} {lease.currency}/month · starts{" "}
+            {lease.starts_on}
+          </MenuItem>
+        ))}
+      </TextField>
       <Button
         size="small"
-        disabled={busy}
+        disabled={busy || leases.length === 0}
         onClick={form.submit((values) => onLink(values.leaseId))}
       >
         Link lease
@@ -72,13 +99,14 @@ export function ProspectsPanel({
   const [filter, setFilter] = useState<ProspectStatus | "">("");
   const vm = useProspects(org, building, filter || undefined);
   const spaces = useProspectSpaces(org, building);
+  const leases = useProspectLeases(org, building);
   const [createOpen, setCreateOpen] = useState(false);
   const form = useZodForm(newProspectSchema, emptyProspect);
   const [screeningProspect, setScreeningProspect] = useState<{
     id: string;
     name: string;
   } | null>(null);
-  const error = vm.error || vm.list.error?.message;
+  const error = vm.error || vm.list.error?.message || leases.error?.message;
 
   const spaceName = (id: string) =>
     spaces.data?.find((item) => item.id === id)?.name ?? "Space";
@@ -190,6 +218,11 @@ export function ProspectsPanel({
                 )}
                 {item.status === "APPROVED" && (
                   <LinkLeaseForm
+                    leases={linkableLeases(
+                      leases.data ?? [],
+                      item,
+                      vm.list.data ?? [],
+                    )}
                     busy={vm.busy}
                     onLink={(leaseId) => vm.linkLease(item.id, leaseId)}
                   />

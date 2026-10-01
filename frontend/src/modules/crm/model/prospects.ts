@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import type { Lease } from "@/modules/leases";
 import {
   optionalEmail,
   optionalText,
+  requiredChoice,
   requiredText,
 } from "@/shared/forms/rules";
 
@@ -44,8 +46,27 @@ export const newProspectSchema = z.object({
 export type NewProspect = z.infer<typeof newProspectSchema>;
 
 export const linkLeaseSchema = z.object({
-  leaseId: z.string().trim().uuid("Enter a valid lease ID"),
+  leaseId: requiredChoice("Select a lease"),
 });
+
+/** Leases a prospect may be linked to: same space, draft or active, not taken. */
+export function linkableLeases(
+  leases: Lease[],
+  prospect: Pick<ProspectSummary, "id" | "space_id">,
+  prospects: Pick<ProspectSummary, "id" | "lease_id">[],
+) {
+  const taken = new Set(
+    prospects
+      .filter((other) => other.id !== prospect.id && other.lease_id)
+      .map((other) => other.lease_id),
+  );
+  return leases.filter(
+    (lease) =>
+      ["DRAFT", "ACTIVE"].includes(lease.status) &&
+      lease.space_id === prospect.space_id &&
+      !taken.has(lease.id),
+  );
+}
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/prospects`;

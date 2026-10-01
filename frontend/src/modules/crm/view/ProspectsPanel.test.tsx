@@ -2,11 +2,16 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { ProspectsPanel } from "./ProspectsPanel";
-import { useProspects, useProspectSpaces } from "../viewmodel/useProspects";
+import {
+  useProspectLeases,
+  useProspects,
+  useProspectSpaces,
+} from "../viewmodel/useProspects";
 
 vi.mock("../viewmodel/useProspects", () => ({
   useProspects: vi.fn(),
   useProspectSpaces: vi.fn(),
+  useProspectLeases: vi.fn(),
 }));
 vi.mock("@/modules/screening", () => ({
   ScreeningDialog: ({ prospectName }: { prospectName: string }) => (
@@ -48,7 +53,22 @@ beforeEach(() => {
     data: [{ id: "space-1", name: "Flat 1", code: "F1", status: "VACANT" }],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
+  vi.mocked(useProspectLeases).mockReturnValue({
+    data: [lease("lease-1", "space-1", "DRAFT")],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
 });
+
+function lease(id: string, spaceId: string, status: string) {
+  return {
+    id,
+    space_id: spaceId,
+    status,
+    rent_amount: "1200.00",
+    currency: "USD",
+    starts_on: "2026-02-01",
+  };
+}
 
 it("lists prospects with their space and status", () => {
   render(<ProspectsPanel org="org" building="building" />);
@@ -65,25 +85,86 @@ it("moves a prospect to a new status", async () => {
   expect(updateStatus).toHaveBeenCalledWith("prospect-1", "REJECTED");
 });
 
-const leaseUuid = "11111111-1111-4111-8111-111111111111";
-
-it("links an approved prospect to a lease", async () => {
+it("links an approved prospect to a lease picked from a list", async () => {
   render(<ProspectsPanel org="org" building="building" />);
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText("Lease ID"), leaseUuid);
+  await user.click(screen.getByLabelText("Lease"));
+  await user.click(
+    await screen.findByRole("option", { name: /DRAFT · 1200.00 USD\/month/ }),
+  );
   await user.click(screen.getByRole("button", { name: "Link lease" }));
   await waitFor(() =>
-    expect(linkLease).toHaveBeenCalledWith("prospect-1", leaseUuid),
+    expect(linkLease).toHaveBeenCalledWith("prospect-1", "lease-1"),
   );
 });
 
-it("rejects a lease ID that is not a UUID", async () => {
+it("asks for a lease before linking", async () => {
   render(<ProspectsPanel org="org" building="building" />);
-  const user = userEvent.setup();
-  await user.type(screen.getByLabelText("Lease ID"), "lease-1");
-  await user.click(screen.getByRole("button", { name: "Link lease" }));
-  expect(await screen.findByText("Enter a valid lease ID")).toBeInTheDocument();
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Link lease" }));
+  expect(await screen.findByText("Select a lease")).toBeInTheDocument();
   expect(linkLease).not.toHaveBeenCalled();
+});
+
+it("only offers draft or active leases for the prospect's space that are not already linked", async () => {
+  vi.mocked(useProspectLeases).mockReturnValue({
+    data: [
+      lease("lease-ok", "space-1", "ACTIVE"),
+      lease("lease-other-space", "space-2", "DRAFT"),
+      lease("lease-ended", "space-1", "ENDED"),
+      lease("lease-taken", "space-1", "DRAFT"),
+    ],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  const base = vi.mocked(useProspects)("org", "building");
+  vi.mocked(useProspects).mockReturnValue({
+    ...base,
+    list: {
+      ...base.list,
+      data: [
+        ...(base.list.data ?? []),
+        {
+          id: "prospect-2",
+          space_id: "space-1",
+          listing_id: null,
+          lease_id: "lease-taken",
+          name: "Other Person",
+          email: null,
+          phone: null,
+          status: "LEASED",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ProspectsPanel org="org" building="building" />);
+  await userEvent.setup().click(screen.getByLabelText("Lease"));
+  expect(await screen.findAllByRole("option")).toHaveLength(1);
+  expect(screen.getByRole("option", { name: /ACTIVE/ })).toBeInTheDocument();
+});
+
+it("explains when there is no lease to link and disables the button", () => {
+  vi.mocked(useProspectLeases).mockReturnValue({
+    data: [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ProspectsPanel org="org" building="building" />);
+  expect(
+    screen.getByText(/No draft or active lease for this space yet/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Link lease" })).toBeDisabled();
+});
+
+it("shows an error instead of a silently empty list when leases fail to load", () => {
+  vi.mocked(useProspectLeases).mockReturnValue({
+    data: undefined,
+    error: new Error("Unable to complete request"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ProspectsPanel org="org" building="building" />);
+  expect(screen.getByText("Unable to complete request")).toBeInTheDocument();
 });
 
 it("blocks a new prospect without a space or name and flags a bad email", async () => {

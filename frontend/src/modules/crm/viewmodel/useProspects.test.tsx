@@ -1,8 +1,8 @@
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
-import { useProspects } from "./useProspects";
+import { useProspectLeases, useProspects } from "./useProspects";
 import { prospectsApi } from "../model/prospects";
 
 vi.mock("../model/prospects", async (importOriginal) => {
@@ -20,6 +20,11 @@ vi.mock("../model/prospects", async (importOriginal) => {
 });
 vi.mock("@/modules/buildings", () => ({
   buildingsApi: { spaces: vi.fn().mockResolvedValue([]) },
+}));
+vi.mock("@/modules/leases", () => ({
+  leasesApi: {
+    list: vi.fn().mockResolvedValue([{ id: "lease-1", status: "DRAFT" }]),
+  },
 }));
 
 const validProspect = {
@@ -80,5 +85,15 @@ it("updates status and links a lease through the right endpoints", async () => {
     "building",
     "prospect-1",
     "lease-1",
+  );
+});
+
+it("loads the building's leases for linking, sharing the leases cache key", async () => {
+  const { result } = renderHook(() => useProspectLeases("org", "building"), {
+    wrapper,
+  });
+  await waitFor(() => expect(result.current.data).toHaveLength(1));
+  expect(query.getQueryData(["org", "building", "building", "leases"])).toEqual(
+    [{ id: "lease-1", status: "DRAFT" }],
   );
 });

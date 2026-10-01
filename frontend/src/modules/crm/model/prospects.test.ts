@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { linkLeaseSchema, newProspectSchema } from "./prospects";
+import type { Lease } from "@/modules/leases";
+import {
+  linkableLeases,
+  linkLeaseSchema,
+  newProspectSchema,
+} from "./prospects";
 
 describe("newProspectSchema backend limits", () => {
   const valid = {
@@ -23,16 +28,45 @@ describe("newProspectSchema backend limits", () => {
 });
 
 describe("linkLeaseSchema", () => {
-  it("requires the lease id to be a UUID", () => {
-    expect(linkLeaseSchema.safeParse({ leaseId: "lease-1" }).success).toBe(
-      false,
+  it("requires a lease to be chosen", () => {
+    const blank = linkLeaseSchema.safeParse({ leaseId: "" });
+    expect(!blank.success && blank.error.issues[0].message).toBe(
+      "Select a lease",
     );
-    expect(linkLeaseSchema.safeParse({ leaseId: "" }).success).toBe(false);
+    expect(linkLeaseSchema.safeParse({ leaseId: "lease-1" }).success).toBe(
+      true,
+    );
+  });
+});
+
+describe("linkableLeases", () => {
+  const lease = (id: string, space_id: string, status: string) =>
+    ({ id, space_id, status }) as Lease;
+  const prospect = { id: "p1", space_id: "s1" };
+
+  it("keeps draft or active leases for the prospect's space", () => {
+    const leases = [
+      lease("a", "s1", "DRAFT"),
+      lease("b", "s1", "ACTIVE"),
+      lease("c", "s1", "ENDED"),
+      lease("d", "s1", "CANCELLED"),
+      lease("e", "s2", "DRAFT"),
+    ];
+    expect(linkableLeases(leases, prospect, []).map((l) => l.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("drops leases already linked to another prospect but keeps this prospect's own", () => {
+    const leases = [lease("a", "s1", "DRAFT"), lease("b", "s1", "DRAFT")];
+    const prospects = [
+      { id: "p2", lease_id: "a" },
+      { id: "p1", lease_id: "b" },
+    ];
     expect(
-      linkLeaseSchema.safeParse({
-        leaseId: "11111111-1111-1111-1111-111111111111",
-      }).success,
-    ).toBe(true);
+      linkableLeases(leases, prospect, prospects).map((l) => l.id),
+    ).toEqual(["b"]);
   });
 });
 

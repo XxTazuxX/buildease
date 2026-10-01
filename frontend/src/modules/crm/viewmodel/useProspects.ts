@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildingsApi, type Space } from "@/modules/buildings";
+import { leasesApi, type Lease } from "@/modules/leases";
 import {
   newProspectSchema,
   prospectsApi,
@@ -51,6 +52,14 @@ export function useProspects(
     linkLease: (id: string, leaseId: string) =>
       run(() => prospectsApi.linkLease(org, building, id, leaseId)),
   };
+}
+
+export function useProspectLeases(org: string, building: string) {
+  return useQuery<Lease[]>({
+    queryKey: [org, "building", building, "leases"],
+    queryFn: () => leasesApi.list(org, building),
+    enabled: !!building,
+  });
 }
 
 export function useProspectSpaces(org: string, building: string) {
