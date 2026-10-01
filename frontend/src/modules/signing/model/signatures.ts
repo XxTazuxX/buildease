@@ -1,4 +1,19 @@
+import { z } from "zod";
 import { api } from "@/shared/api/client";
+import { requiredText } from "@/shared/forms/rules";
+
+/** Backend @Size limit on a drawn signature's data URL. */
+export const SIGNATURE_DATA_MAX = 200000;
+
+export const signFormSchema = z.object({ signedName: requiredText(160) });
+
+/** Returns a message when a drawn signature cannot be submitted, otherwise null. */
+export function drawingError(drawing: string | null) {
+  if (!drawing) return "Draw your signature above";
+  if (drawing.length > SIGNATURE_DATA_MAX)
+    return "The drawing is too large. Clear it and draw a simpler signature";
+  return null;
+}
 
 export const signatureRoles = ["OWNER", "RESIDENT"] as const;
 export type SignatureRole = (typeof signatureRoles)[number];

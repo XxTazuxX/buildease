@@ -1,5 +1,18 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalEmail,
+  optionalInteger,
+  optionalMoney,
+  optionalText,
+  optionalUuid,
+  requiredChoice,
+  requiredDate,
+  requiredInteger,
+  requiredMoney,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const impacts = ["LOW", "MEDIUM", "HIGH"] as const;
 export const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -39,14 +52,71 @@ export interface MaintenanceRequest {
   updated_at: string;
 }
 export const requestSchema = z.object({
-  spaceId: z.string().uuid(),
-  categoryId: z.string().uuid(),
-  title: z.string().trim().min(1).max(160),
-  description: z.string().trim().min(1).max(4000),
-  impact: z.enum(impacts),
+  spaceId: z.string().uuid("Select a space"),
+  categoryId: z.string().uuid("Select a category"),
+  title: requiredText(160),
+  description: requiredText(4000),
+  impact: enumChoice(impacts),
   danger: z.boolean(),
 });
 export type NewMaintenanceRequest = z.infer<typeof requestSchema>;
+
+export const categoryFormSchema = z
+  .object({
+    name: requiredText(120),
+    responseHours: requiredInteger({ min: 1, max: 8760 }),
+    resolutionHours: requiredInteger({ min: 1, max: 87600 }),
+  })
+  .superRefine((category, ctx) => {
+    if (category.resolutionHours < category.responseHours)
+      ctx.addIssue({
+        code: "custom",
+        path: ["resolutionHours"],
+        message: "Resolution target must not precede the response target",
+      });
+  });
+
+export const resolutionFormSchema = z.object({ summary: requiredText(2000) });
+export const reasonFormSchema = z.object({ reason: requiredText(500) });
+
+export const assignmentFormSchema = z
+  .object({
+    target: z.enum(["vendor", "staff"]),
+    vendorId: z.string(),
+    accountId: z.string(),
+    estimate: optionalMoney(),
+  })
+  .superRefine((assignment, ctx) => {
+    if (assignment.target === "vendor" && !assignment.vendorId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["vendorId"],
+        message: "Select a vendor",
+      });
+    if (assignment.target === "staff" && !assignment.accountId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["accountId"],
+        message: "Select a staff member",
+      });
+  });
+
+export const vendorFormSchema = z.object({
+  name: requiredText(160),
+  email: optionalEmail(254),
+  phone: optionalText(40),
+  accountId: optionalUuid("Enter a valid account ID"),
+});
+
+export const commentFormSchema = z.object({
+  body: requiredText(2000),
+  internal: z.boolean(),
+});
+export const workLogFormSchema = z.object({
+  note: requiredText(2000),
+  minutes: optionalInteger({ min: 1, max: 1440 }),
+});
+export const workCostFormSchema = z.object({ actualCost: requiredMoney() });
 export interface Comment {
   id: string;
   actor_id: string;
@@ -123,12 +193,21 @@ export interface RecurringPlan {
 export const recurringPlanSchema = z.object({
   spaceId: z.string().uuid(),
   categoryId: z.string().uuid(),
-  title: z.string().trim().min(1).max(160),
-  description: z.string().trim().min(1).max(2000),
+  title: requiredText(160),
+  description: requiredText(2000),
   intervalDays: z.number().int().min(1).max(3650),
   nextRunOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 export type NewRecurringPlan = z.infer<typeof recurringPlanSchema>;
+
+export const recurringPlanFormSchema = z.object({
+  spaceId: requiredChoice("Select a space"),
+  categoryId: requiredChoice("Select a category"),
+  title: requiredText(160),
+  description: requiredText(2000),
+  intervalDays: requiredInteger({ min: 1, max: 3650 }),
+  nextRunOn: requiredDate(),
+});
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/maintenance`;
 export const maintenanceApi = {
@@ -267,12 +346,19 @@ export const maintenanceApi = {
   ) =>
     api(`${base(org, building)}/work-orders/${workOrder}/costs`, "POST", body),
 };
-export async function stripPhotoMetadata(file: File) {
+/** Mirrors the backend photo rules: JPEG/PNG/WebP, 1 byte to 10 MB. */
+export function photoProblem(file: { type: string; size: number }) {
+  if (file.size < 1) return "The selected photo is empty";
   if (
     !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
     file.size > 10 * 1024 * 1024
   )
-    throw new Error("Choose a JPEG, PNG, or WebP photo up to 10 MB");
+    return "Choose a JPEG, PNG, or WebP photo up to 10 MB";
+  return null;
+}
+export async function stripPhotoMetadata(file: File) {
+  const problem = photoProblem(file);
+  if (problem) throw new Error(problem);
   const bitmap = await createImageBitmap(file);
   if (bitmap.width > 6000 || bitmap.height > 6000) {
     bitmap.close();

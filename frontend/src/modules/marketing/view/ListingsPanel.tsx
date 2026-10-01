@@ -8,6 +8,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  FormHelperText,
   MenuItem,
   Paper,
   Stack,
@@ -16,7 +17,12 @@ import {
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
-import { listingChannels, type ListingChannel } from "../model/listings";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  listingChannels,
+  listingFormSchema,
+  type ListingChannel,
+} from "../model/listings";
 import {
   useListingDetail,
   useListingSpaces,
@@ -40,10 +46,11 @@ export function ListingsPanel({
   const vm = useListings(org, building);
   const spaces = useListingSpaces(org, building);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(emptyListing);
+  const form = useZodForm(listingFormSchema, emptyListing);
   const [publishing, setPublishing] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [channels, setChannels] = useState<ListingChannel[]>([]);
+  const [channelsTried, setChannelsTried] = useState(false);
   const error = vm.error || vm.list.error?.message;
 
   const spaceName = (id: string) =>
@@ -71,7 +78,7 @@ export function ListingsPanel({
         <Button
           variant="contained"
           onClick={() => {
-            setForm(emptyListing);
+            form.reset(emptyListing);
             setCreateOpen(true);
           }}
         >
@@ -108,6 +115,7 @@ export function ListingsPanel({
                 <Button
                   onClick={() => {
                     setChannels([]);
+                    setChannelsTried(false);
                     setPublishing(item.id);
                   }}
                 >
@@ -141,12 +149,7 @@ export function ListingsPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              select
-              label="Space"
-              value={form.spaceId}
-              onChange={(e) => setForm({ ...form, spaceId: e.target.value })}
-            >
+            <TextField select label="Space" {...form.field("spaceId")}>
               {spaces.data
                 ?.filter(
                   (item) =>
@@ -159,39 +162,24 @@ export function ListingsPanel({
                   </MenuItem>
                 ))}
             </TextField>
-            <TextField
-              label="Headline"
-              value={form.headline}
-              onChange={(e) => setForm({ ...form, headline: e.target.value })}
-            />
+            <TextField label="Headline" {...form.field("headline")} />
             <TextField
               label="Description"
               multiline
               minRows={3}
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
+              {...form.field("description")}
             />
             <TextField
               label="Monthly rent"
               type="number"
-              value={form.rentAmount}
-              onChange={(e) => setForm({ ...form, rentAmount: e.target.value })}
+              {...form.field("rentAmount")}
             />
             <Button
               variant="contained"
-              disabled={
-                vm.busy ||
-                !form.spaceId ||
-                !form.headline.trim() ||
-                !form.rentAmount
-              }
-              onClick={() =>
-                void vm
-                  .create({ ...form, rentAmount: Number(form.rentAmount) })
-                  .then((ok) => ok && setCreateOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={form.submit(async (values) => {
+                if (await vm.create(values)) setCreateOpen(false);
+              })}
             >
               Create listing
             </Button>
@@ -228,14 +216,21 @@ export function ListingsPanel({
                   }
                 />
               ))}
+              {channelsTried && channels.length === 0 && (
+                <FormHelperText error>
+                  Select at least one channel
+                </FormHelperText>
+              )}
               <Button
                 variant="contained"
-                disabled={vm.busy || channels.length === 0}
-                onClick={() =>
+                disabled={vm.busy}
+                onClick={() => {
+                  setChannelsTried(true);
+                  if (channels.length === 0) return;
                   void vm
                     .publish(publishing, channels)
-                    .then((ok) => ok && setPublishing(null))
-                }
+                    .then((ok) => ok && setPublishing(null));
+                }}
               >
                 Publish
               </Button>

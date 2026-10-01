@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import { requiredText } from "@/shared/forms/rules";
 
 export interface ApiKeySummary {
   id: string;
@@ -14,7 +15,7 @@ export interface NewApiKey {
 }
 
 export const apiKeySchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: requiredText(120),
 });
 export type NewApiKeyRequest = z.infer<typeof apiKeySchema>;
 

@@ -6,12 +6,19 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  FormHelperText,
   MenuItem,
   Stack,
   TextField,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
-import { impacts, type Impact } from "../model/maintenance";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  impacts,
+  photoProblem,
+  requestSchema,
+  type Impact,
+} from "../model/maintenance";
 import type { useMaintenance } from "../viewmodel/useMaintenance";
 import type { Space } from "@/modules/buildings/model/buildings";
 
@@ -27,7 +34,8 @@ export function ReportIssueDialog({
   spaceOptions?: Space[];
 }) {
   const [photo, setPhoto] = useState<File>();
-  const [request, setRequest] = useState({
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const request = useZodForm(requestSchema, {
     spaceId: "",
     categoryId: "",
     title: "",
@@ -41,28 +49,14 @@ export function ReportIssueDialog({
       <DialogTitle>Report maintenance issue</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField
-            select
-            label="Space"
-            value={request.spaceId}
-            onChange={(e) =>
-              setRequest({ ...request, spaceId: e.target.value })
-            }
-          >
+          <TextField select label="Space" {...request.field("spaceId")}>
             {spaces?.map((space) => (
               <MenuItem key={space.id} value={space.id}>
                 {space.name} · {space.code}
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            select
-            label="Category"
-            value={request.categoryId}
-            onChange={(e) =>
-              setRequest({ ...request, categoryId: e.target.value })
-            }
-          >
+          <TextField select label="Category" {...request.field("categoryId")}>
             {vm.categories.data?.map((item) => (
               <MenuItem key={item.id} value={item.id}>
                 {item.name}
@@ -75,30 +69,14 @@ export function ReportIssueDialog({
               property manager to add one before a request can be submitted.
             </Alert>
           )}
-          <TextField
-            label="Short title"
-            value={request.title}
-            onChange={(e) => setRequest({ ...request, title: e.target.value })}
-            slotProps={{ htmlInput: { maxLength: 160 } }}
-          />
+          <TextField label="Short title" {...request.field("title")} />
           <TextField
             label="What happened?"
             multiline
             minRows={4}
-            value={request.description}
-            onChange={(e) =>
-              setRequest({ ...request, description: e.target.value })
-            }
-            slotProps={{ htmlInput: { maxLength: 4000 } }}
+            {...request.field("description")}
           />
-          <TextField
-            select
-            label="Impact"
-            value={request.impact}
-            onChange={(e) =>
-              setRequest({ ...request, impact: e.target.value as Impact })
-            }
-          >
+          <TextField select label="Impact" {...request.field("impact")}>
             {impacts.map((impact) => (
               <MenuItem key={impact} value={impact}>
                 {impact}
@@ -108,10 +86,8 @@ export function ReportIssueDialog({
           <FormControlLabel
             control={
               <Checkbox
-                checked={request.danger}
-                onChange={(_, checked) =>
-                  setRequest({ ...request, danger: checked })
-                }
+                checked={request.values.danger}
+                onChange={(_, checked) => request.setValue("danger", checked)}
               />
             }
             label="This may be dangerous or cause immediate damage"
@@ -122,20 +98,25 @@ export function ReportIssueDialog({
               hidden
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={(event) => setPhoto(event.target.files?.[0])}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                setPhotoError(file ? photoProblem(file) : null);
+                setPhoto(file);
+              }}
             />
           </Button>
+          {photoError && <FormHelperText error>{photoError}</FormHelperText>}
           <Button
             variant="contained"
-            disabled={vm.busy || !request.spaceId || !request.categoryId}
-            onClick={() =>
-              void vm.submit(request, photo).then((ok) => {
-                if (ok) {
-                  setPhoto(undefined);
-                  onClose();
-                }
-              })
-            }
+            disabled={vm.busy}
+            onClick={request.submit(async (values) => {
+              if (photoError) return;
+              if (await vm.submit(values, photo)) {
+                setPhoto(undefined);
+                request.reset();
+                onClose();
+              }
+            })}
           >
             Submit request
           </Button>

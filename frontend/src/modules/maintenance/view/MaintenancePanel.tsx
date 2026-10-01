@@ -14,11 +14,97 @@ import {
   Typography,
 } from "@mui/material";
 import { Pager } from "@/shared/components/Pager";
+import { PromptDialog } from "@/shared/components/PromptDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  assignmentFormSchema,
+  categoryFormSchema,
+  vendorFormSchema,
+} from "../model/maintenance";
 import { useMaintenance } from "../viewmodel/useMaintenance";
 import { RecurringPlansDialog } from "./RecurringPlansDialog";
 import { ReportIssueDialog } from "./ReportIssueDialog";
 import { RequestDetailDialog } from "./RequestDetailDialog";
+
+const emptyCategory = { name: "", responseHours: "4", resolutionHours: "48" };
+const emptyVendor = { name: "", email: "", phone: "", accountId: "" };
+
+function AssignWorkDialog({
+  vm,
+  request,
+  close,
+}: {
+  vm: ReturnType<typeof useMaintenance>;
+  request: string;
+  close: () => void;
+}) {
+  const form = useZodForm(assignmentFormSchema, {
+    target: "vendor" as "vendor" | "staff",
+    vendorId: "",
+    accountId: "",
+    estimate: "",
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>Assign work</DialogTitle>
+      <Divider />
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {vm.error && <Alert severity="error">{vm.error}</Alert>}
+          <TextField select label="Assign to" {...form.field("target")}>
+            <MenuItem value="vendor">Vendor</MenuItem>
+            <MenuItem value="staff">Staff account</MenuItem>
+          </TextField>
+          {form.values.target === "vendor" ? (
+            <TextField select label="Vendor" {...form.field("vendorId")}>
+              {vm.vendors.data?.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : (
+            <TextField
+              select
+              label="Staff member"
+              {...form.field("accountId")}
+              helperText={
+                form.error("accountId") ??
+                "Must hold the Maintenance staff or Property manager role here"
+              }
+            >
+              {(vm.members?.data ?? [])
+                .filter((member) => member.status === "ACTIVE")
+                .map((member) => (
+                  <MenuItem key={member.account_id} value={member.account_id}>
+                    {member.display_name} · {member.email}
+                  </MenuItem>
+                ))}
+            </TextField>
+          )}
+          <TextField
+            label="Estimated cost (optional)"
+            type="number"
+            {...form.field("estimate")}
+          />
+          <Button
+            variant="contained"
+            disabled={vm.busy}
+            onClick={form.submit(async (values) => {
+              const ok = await (values.target === "vendor"
+                ? vm.assignVendor(request, values.vendorId, values.estimate)
+                : vm.assignStaff(request, values.accountId, values.estimate));
+              if (ok) close();
+            })}
+          >
+            Assign
+          </Button>
+        </Stack>
+      </DialogContent>
+    </AdaptiveDialog>
+  );
+}
 
 export function MaintenancePanel({
   org,
@@ -39,26 +125,13 @@ export function MaintenancePanel({
   const [assigningRequest, setAssigningRequest] = useState<string | null>(null);
   const [vendorsOpen, setVendorsOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<"staff" | "vendor">(
-    "vendor",
-  );
-  const [assignAccountId, setAssignAccountId] = useState("");
-  const [assignVendorId, setAssignVendorId] = useState("");
-  const [assignEstimate, setAssignEstimate] = useState("");
-  const [newVendor, setNewVendor] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    accountId: "",
-  });
-  const [category, setCategory] = useState({
-    name: "",
-    responseHours: 4,
-    resolutionHours: 48,
-  });
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const newVendor = useZodForm(vendorFormSchema, emptyVendor);
+  const category = useZodForm(categoryFormSchema, emptyCategory);
   const resetCategoryForm = () => {
     setEditingCategory(null);
-    setCategory({ name: "", responseHours: 4, resolutionHours: 48 });
+    category.reset(emptyCategory);
   };
   const error =
     vm.error ||
@@ -202,10 +275,6 @@ export function MaintenancePanel({
                       disabled={vm.busy}
                       onClick={() => {
                         void vm.members?.refetch();
-                        setAssignTarget("vendor");
-                        setAssignAccountId("");
-                        setAssignVendorId("");
-                        setAssignEstimate("");
                         setAssigningRequest(item.id);
                       }}
                     >
@@ -223,10 +292,7 @@ export function MaintenancePanel({
                   {item.status === "IN_PROGRESS" && (
                     <Button
                       disabled={vm.busy}
-                      onClick={() => {
-                        const summary = window.prompt("Resolution summary");
-                        if (summary) void vm.resolve(item.id, summary);
-                      }}
+                      onClick={() => setResolving(item.id)}
                     >
                       Resolve
                     </Button>
@@ -252,10 +318,7 @@ export function MaintenancePanel({
                       <Button
                         color="error"
                         disabled={vm.busy}
-                        onClick={() => {
-                          const reason = window.prompt("Reason for cancelling");
-                          if (reason?.trim()) void vm.cancel(item.id, reason);
-                        }}
+                        onClick={() => setCancelling(item.id)}
                       >
                         Cancel
                       </Button>
@@ -332,13 +395,13 @@ export function MaintenancePanel({
                         size="small"
                         onClick={() => {
                           setEditingCategory(item.id);
-                          setCategory({
+                          category.reset({
                             name: item.name,
-                            responseHours: Math.round(
-                              item.response_minutes / 60,
+                            responseHours: String(
+                              Math.round(item.response_minutes / 60),
                             ),
-                            resolutionHours: Math.round(
-                              item.resolution_minutes / 60,
+                            resolutionHours: String(
+                              Math.round(item.resolution_minutes / 60),
                             ),
                           });
                         }}
@@ -354,46 +417,27 @@ export function MaintenancePanel({
             <Typography variant="subtitle2">
               {editingCategory ? "Edit category" : "Add a category"}
             </Typography>
-            <TextField
-              label="Category name"
-              value={category.name}
-              onChange={(e) =>
-                setCategory({ ...category, name: e.target.value })
-              }
-            />
+            <TextField label="Category name" {...category.field("name")} />
             <TextField
               label="Response target (hours)"
               type="number"
-              value={category.responseHours}
-              onChange={(e) =>
-                setCategory({
-                  ...category,
-                  responseHours: Number(e.target.value),
-                })
-              }
+              {...category.field("responseHours")}
             />
             <TextField
               label="Resolution target (hours)"
               type="number"
-              value={category.resolutionHours}
-              onChange={(e) =>
-                setCategory({
-                  ...category,
-                  resolutionHours: Number(e.target.value),
-                })
-              }
+              {...category.field("resolutionHours")}
             />
             <Stack direction="row" spacing={1}>
               <Button
                 variant="contained"
-                disabled={vm.busy || !category.name.trim()}
-                onClick={() =>
-                  void (
-                    editingCategory
-                      ? vm.updateCategory(editingCategory, category)
-                      : vm.createCategory(category)
-                  ).then((ok) => ok && resetCategoryForm())
-                }
+                disabled={vm.busy}
+                onClick={category.submit(async (values) => {
+                  const ok = await (editingCategory
+                    ? vm.updateCategory(editingCategory, values)
+                    : vm.createCategory(values));
+                  if (ok) resetCategoryForm();
+                })}
               >
                 {editingCategory ? "Save changes" : "Create category"}
               </Button>
@@ -416,96 +460,51 @@ export function MaintenancePanel({
       )}
 
       {assigningRequest && (
-        <AdaptiveDialog
-          open
-          onClose={() => setAssigningRequest(null)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>Assign work</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <TextField
-                select
-                label="Assign to"
-                value={assignTarget}
-                onChange={(e) =>
-                  setAssignTarget(e.target.value as "staff" | "vendor")
-                }
-              >
-                <MenuItem value="vendor">Vendor</MenuItem>
-                <MenuItem value="staff">Staff account</MenuItem>
-              </TextField>
-              {assignTarget === "vendor" ? (
-                <TextField
-                  select
-                  label="Vendor"
-                  value={assignVendorId}
-                  onChange={(e) => setAssignVendorId(e.target.value)}
-                >
-                  {vm.vendors.data?.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              ) : (
-                <TextField
-                  select
-                  label="Staff member"
-                  helperText="Must hold the Maintenance staff or Property manager role here"
-                  value={assignAccountId}
-                  onChange={(e) => setAssignAccountId(e.target.value)}
-                >
-                  {(vm.members?.data ?? [])
-                    .filter((member) => member.status === "ACTIVE")
-                    .map((member) => (
-                      <MenuItem
-                        key={member.account_id}
-                        value={member.account_id}
-                      >
-                        {member.display_name} · {member.email}
-                      </MenuItem>
-                    ))}
-                </TextField>
-              )}
-              <TextField
-                label="Estimated cost (optional)"
-                type="number"
-                value={assignEstimate}
-                onChange={(e) => setAssignEstimate(e.target.value)}
-              />
-              <Button
-                variant="contained"
-                disabled={
-                  vm.busy ||
-                  (assignTarget === "vendor"
-                    ? !assignVendorId
-                    : !assignAccountId)
-                }
-                onClick={() =>
-                  void (
-                    assignTarget === "vendor"
-                      ? vm.assignVendor(
-                          assigningRequest,
-                          assignVendorId,
-                          assignEstimate ? Number(assignEstimate) : undefined,
-                        )
-                      : vm.assignStaff(
-                          assigningRequest,
-                          assignAccountId,
-                          assignEstimate ? Number(assignEstimate) : undefined,
-                        )
-                  ).then((ok) => ok && setAssigningRequest(null))
-                }
-              >
-                Assign
-              </Button>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+        <AssignWorkDialog
+          vm={vm}
+          request={assigningRequest}
+          close={() => setAssigningRequest(null)}
+        />
+      )}
+
+      {resolving && (
+        <PromptDialog
+          title="Resolve request"
+          fields={[
+            {
+              name: "summary",
+              label: "Resolution summary",
+              max: 2000,
+              multiline: true,
+            },
+          ]}
+          label="Resolve"
+          error={vm.error}
+          onClose={() => setResolving(null)}
+          onSubmit={async (values) => {
+            if (await vm.resolve(resolving, values.summary)) setResolving(null);
+          }}
+        />
+      )}
+
+      {cancelling && (
+        <PromptDialog
+          title="Cancel request"
+          fields={[
+            {
+              name: "reason",
+              label: "Reason for cancelling",
+              max: 500,
+              multiline: true,
+            },
+          ]}
+          label="Cancel request"
+          error={vm.error}
+          onClose={() => setCancelling(null)}
+          onSubmit={async (values) => {
+            if (await vm.cancel(cancelling, values.reason)) setCancelling(null);
+          }}
+        />
       )}
 
       <AdaptiveDialog
@@ -536,56 +535,29 @@ export function MaintenancePanel({
             </Stack>
             <Divider />
             <Typography variant="subtitle2">Add a vendor</Typography>
-            <TextField
-              label="Vendor name"
-              value={newVendor.name}
-              onChange={(e) =>
-                setNewVendor({ ...newVendor, name: e.target.value })
-              }
-            />
-            <TextField
-              label="Email (optional)"
-              value={newVendor.email}
-              onChange={(e) =>
-                setNewVendor({ ...newVendor, email: e.target.value })
-              }
-            />
-            <TextField
-              label="Phone (optional)"
-              value={newVendor.phone}
-              onChange={(e) =>
-                setNewVendor({ ...newVendor, phone: e.target.value })
-              }
-            />
+            <TextField label="Vendor name" {...newVendor.field("name")} />
+            <TextField label="Email (optional)" {...newVendor.field("email")} />
+            <TextField label="Phone (optional)" {...newVendor.field("phone")} />
             <TextField
               label="Link to account ID (optional)"
-              helperText="The account must already have the Vendor role in this building"
-              value={newVendor.accountId}
-              onChange={(e) =>
-                setNewVendor({ ...newVendor, accountId: e.target.value })
+              {...newVendor.field("accountId")}
+              helperText={
+                newVendor.error("accountId") ??
+                "The account must already have the Vendor role in this building"
               }
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !newVendor.name.trim()}
-              onClick={() =>
-                void vm
-                  .createVendor({
-                    name: newVendor.name,
-                    email: newVendor.email || undefined,
-                    phone: newVendor.phone || undefined,
-                    accountId: newVendor.accountId || undefined,
-                  })
-                  .then((ok) => {
-                    if (ok)
-                      setNewVendor({
-                        name: "",
-                        email: "",
-                        phone: "",
-                        accountId: "",
-                      });
-                  })
-              }
+              disabled={vm.busy}
+              onClick={newVendor.submit(async (values) => {
+                const ok = await vm.createVendor({
+                  name: values.name,
+                  email: values.email || undefined,
+                  phone: values.phone || undefined,
+                  accountId: values.accountId || undefined,
+                });
+                if (ok) newVendor.reset(emptyVendor);
+              })}
             >
               Add vendor
             </Button>

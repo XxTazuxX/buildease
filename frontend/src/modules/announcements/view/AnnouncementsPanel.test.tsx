@@ -38,6 +38,19 @@ it("lists previously sent announcements with their recipient count", () => {
   expect(screen.getByText("3 recipients")).toBeInTheDocument();
 });
 
+it("blocks an empty announcement and flags an over-long title", async () => {
+  render(<AnnouncementsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Send announcement" }));
+  expect(await screen.findAllByText("Required")).toHaveLength(2);
+  expect(send).not.toHaveBeenCalled();
+  await user.click(screen.getByLabelText("Title"));
+  await user.paste("t".repeat(161));
+  expect(
+    await screen.findByText("Use at most 160 characters"),
+  ).toBeInTheDocument();
+});
+
 it("sends a new announcement with the selected audience", async () => {
   render(<AnnouncementsPanel org="org" building="building" />);
   const user = userEvent.setup();

@@ -65,6 +65,62 @@ it("submits a typed signature", async () => {
   expect(sign).toHaveBeenCalledWith("OWNER", "Owner Name");
 });
 
+it("will not sign without a name and shows the required error", async () => {
+  vi.mocked(useSignature).mockReturnValue({
+    status: {
+      data: { owner: null, resident: null, fullyExecuted: false },
+      error: null,
+    },
+    busy: false,
+    error: "",
+    sign,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(
+    <SignaturePanel
+      org="org"
+      building="building"
+      lease="lease-1"
+      role="OWNER"
+      defaultName=""
+    />,
+  );
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Sign lease" }));
+  expect(await screen.findByText("Required")).toBeInTheDocument();
+  expect(sign).not.toHaveBeenCalled();
+});
+
+it("asks for a drawing before signing in draw mode", async () => {
+  vi.mocked(useSignature).mockReturnValue({
+    status: {
+      data: { owner: null, resident: null, fullyExecuted: false },
+      error: null,
+    },
+    busy: false,
+    error: "",
+    sign,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(
+    <SignaturePanel
+      org="org"
+      building="building"
+      lease="lease-1"
+      role="OWNER"
+      defaultName="Owner Name"
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Draw" }));
+  await user.click(screen.getByRole("button", { name: "Sign lease" }));
+  expect(
+    await screen.findByText("Draw your signature above"),
+  ).toBeInTheDocument();
+  expect(sign).not.toHaveBeenCalled();
+});
+
 it("shows a confirmation once the current party has already signed", () => {
   vi.mocked(useSignature).mockReturnValue({
     status: {

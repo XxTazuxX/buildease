@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Alert,
   Box,
@@ -14,7 +13,103 @@ import {
   Typography,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  commentFormSchema,
+  workCostFormSchema,
+  workLogFormSchema,
+  type WorkLog,
+  type WorkOrder,
+} from "../model/maintenance";
 import { useRequestDetail } from "../viewmodel/useMaintenance";
+
+function WorkOrderSection({
+  order,
+  logs,
+  canManage,
+  detail,
+}: {
+  order: WorkOrder;
+  logs: WorkLog[];
+  canManage: boolean;
+  detail: ReturnType<typeof useRequestDetail>;
+}) {
+  const cost = useZodForm(workCostFormSchema, { actualCost: "" });
+  const log = useZodForm(workLogFormSchema, { note: "", minutes: "" });
+  return (
+    <Box sx={{ pl: 1, borderLeft: "2px solid", borderColor: "divider" }}>
+      <Typography variant="body2">
+        {order.status.replaceAll("_", " ")} · Estimated{" "}
+        {order.estimated_cost ?? "—"} {order.currency}
+        {order.actual_cost ? ` · Actual ${order.actual_cost}` : ""}
+      </Typography>
+      {canManage && (
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ mt: 0.5, mb: 1, alignItems: "flex-start" }}
+        >
+          <TextField
+            size="small"
+            label="Actual cost"
+            type="number"
+            {...cost.field("actualCost")}
+          />
+          <Button
+            size="small"
+            disabled={detail.busy}
+            onClick={cost.submit((values) =>
+              detail.updateWorkCosts(order.id, {
+                actualCost: values.actualCost,
+              }),
+            )}
+          >
+            Save cost
+          </Button>
+        </Stack>
+      )}
+      {logs.map((entry) => (
+        <Typography key={entry.id} variant="body2" color="text.secondary">
+          {entry.note}
+          {entry.minutes ? ` (${entry.minutes} min)` : ""}
+        </Typography>
+      ))}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mt: 0.5, alignItems: "flex-start" }}
+      >
+        <TextField
+          size="small"
+          label="Add work note"
+          {...log.field("note")}
+          sx={{ flexGrow: 1 }}
+        />
+        <TextField
+          size="small"
+          label="Minutes"
+          type="number"
+          {...log.field("minutes")}
+          sx={{ width: 100 }}
+        />
+        <Button
+          size="small"
+          disabled={detail.busy}
+          onClick={log.submit(async (values) => {
+            const ok = await detail.addWorkLog(
+              order.id,
+              values.note,
+              values.minutes,
+            );
+            if (ok) log.reset({ note: "", minutes: "" });
+          })}
+        >
+          Log
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
 
 export function RequestDetailDialog({
   org,
@@ -30,11 +125,7 @@ export function RequestDetailDialog({
   onClose: () => void;
 }) {
   const detail = useRequestDetail(org, building, request);
-  const [commentBody, setCommentBody] = useState("");
-  const [internal, setInternal] = useState(false);
-  const [logNotes, setLogNotes] = useState<Record<string, string>>({});
-  const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
-  const [actualCosts, setActualCosts] = useState<Record<string, string>>({});
+  const comment = useZodForm(commentFormSchema, { body: "", internal: false });
   const data = detail.query.data;
 
   return (
@@ -75,101 +166,15 @@ export function RequestDetailDialog({
               <Typography color="text.secondary">Not yet assigned.</Typography>
             )}
             {data.work_orders.map((order) => (
-              <Box
+              <WorkOrderSection
                 key={order.id}
-                sx={{ pl: 1, borderLeft: "2px solid", borderColor: "divider" }}
-              >
-                <Typography variant="body2">
-                  {order.status.replaceAll("_", " ")} · Estimated{" "}
-                  {order.estimated_cost ?? "—"} {order.currency}
-                  {order.actual_cost ? ` · Actual ${order.actual_cost}` : ""}
-                </Typography>
-                {canManage && (
-                  <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 1 }}>
-                    <TextField
-                      size="small"
-                      label="Actual cost"
-                      type="number"
-                      value={actualCosts[order.id] ?? ""}
-                      onChange={(e) =>
-                        setActualCosts({
-                          ...actualCosts,
-                          [order.id]: e.target.value,
-                        })
-                      }
-                    />
-                    <Button
-                      size="small"
-                      disabled={detail.busy || !actualCosts[order.id]}
-                      onClick={() =>
-                        void detail.updateWorkCosts(order.id, {
-                          actualCost: Number(actualCosts[order.id]),
-                        })
-                      }
-                    >
-                      Save cost
-                    </Button>
-                  </Stack>
+                order={order}
+                logs={data.work_logs.filter(
+                  (entry) => entry.work_order_id === order.id,
                 )}
-                {data.work_logs
-                  .filter((log) => log.work_order_id === order.id)
-                  .map((log) => (
-                    <Typography
-                      key={log.id}
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      {log.note}
-                      {log.minutes ? ` (${log.minutes} min)` : ""}
-                    </Typography>
-                  ))}
-                <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                  <TextField
-                    size="small"
-                    label="Add work note"
-                    value={logNotes[order.id] ?? ""}
-                    onChange={(e) =>
-                      setLogNotes({ ...logNotes, [order.id]: e.target.value })
-                    }
-                    sx={{ flexGrow: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    label="Minutes"
-                    type="number"
-                    value={logMinutes[order.id] ?? ""}
-                    onChange={(e) =>
-                      setLogMinutes({
-                        ...logMinutes,
-                        [order.id]: e.target.value,
-                      })
-                    }
-                    sx={{ width: 100 }}
-                  />
-                  <Button
-                    size="small"
-                    disabled={detail.busy || !logNotes[order.id]?.trim()}
-                    onClick={() =>
-                      void detail
-                        .addWorkLog(
-                          order.id,
-                          logNotes[order.id],
-                          logMinutes[order.id]
-                            ? Number(logMinutes[order.id])
-                            : undefined,
-                        )
-                        .then((ok) => {
-                          if (ok) {
-                            setLogNotes({ ...logNotes, [order.id]: "" });
-                            setLogMinutes({ ...logMinutes, [order.id]: "" });
-                          }
-                        })
-                    }
-                  >
-                    Log
-                  </Button>
-                </Stack>
-              </Box>
+                canManage={canManage}
+                detail={detail}
+              />
             ))}
 
             <Divider />
@@ -192,15 +197,16 @@ export function RequestDetailDialog({
                 label="Add a comment"
                 multiline
                 minRows={2}
-                value={commentBody}
-                onChange={(e) => setCommentBody(e.target.value)}
+                {...comment.field("body")}
               />
               {canManage && (
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={internal}
-                      onChange={(_, checked) => setInternal(checked)}
+                      checked={comment.values.internal}
+                      onChange={(_, checked) =>
+                        comment.setValue("internal", checked)
+                      }
                     />
                   }
                   label="Internal note (not visible to the resident)"
@@ -208,12 +214,15 @@ export function RequestDetailDialog({
               )}
               <Button
                 variant="outlined"
-                disabled={detail.busy || !commentBody.trim()}
-                onClick={() =>
-                  void detail.comment(commentBody, internal).then((ok) => {
-                    if (ok) setCommentBody("");
-                  })
-                }
+                disabled={detail.busy}
+                onClick={comment.submit(async (values) => {
+                  const ok = await detail.comment(
+                    values.body,
+                    canManage && values.internal,
+                  );
+                  if (ok)
+                    comment.reset({ body: "", internal: values.internal });
+                })}
               >
                 Add comment
               </Button>

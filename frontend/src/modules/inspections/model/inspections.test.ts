@@ -1,5 +1,49 @@
 import { describe, it, expect } from "vitest";
-import { createInspectionSchema, itemSchema } from "./inspections";
+import {
+  createInspectionSchema,
+  inspectionFormSchema,
+  itemSchema,
+} from "./inspections";
+
+describe("inspectionFormSchema", () => {
+  const valid = {
+    spaceId: "s1",
+    residentId: "",
+    type: "MOVE_IN",
+    scheduledOn: "2026-02-01",
+  };
+  it("requires a space, a type and a real scheduled date", () => {
+    expect(inspectionFormSchema.safeParse(valid).success).toBe(true);
+    expect(
+      inspectionFormSchema.safeParse({ ...valid, spaceId: "" }).success,
+    ).toBe(false);
+    expect(
+      inspectionFormSchema.safeParse({ ...valid, type: "" }).success,
+    ).toBe(false);
+    expect(
+      inspectionFormSchema.safeParse({ ...valid, scheduledOn: "" }).success,
+    ).toBe(false);
+    expect(
+      inspectionFormSchema.safeParse({ ...valid, scheduledOn: "2026-02-30" })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("itemSchema limits", () => {
+  it("requires an area up to 120 characters and notes up to 500", () => {
+    const ok = { area: "Kitchen", condition: "GOOD" };
+    expect(itemSchema.safeParse(ok).success).toBe(true);
+    expect(itemSchema.safeParse({ ...ok, area: " " }).success).toBe(false);
+    expect(itemSchema.safeParse({ ...ok, area: "a".repeat(121) }).success).toBe(
+      false,
+    );
+    expect(itemSchema.safeParse({ ...ok, notes: "n".repeat(501) }).success).toBe(
+      false,
+    );
+    expect(itemSchema.safeParse({ ...ok, condition: "" }).success).toBe(false);
+  });
+});
 
 describe("createInspectionSchema", () => {
   const valid = {

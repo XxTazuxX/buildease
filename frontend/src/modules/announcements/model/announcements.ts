@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import { enumChoice, requiredText } from "@/shared/forms/rules";
 
 export const audiences = ["ALL_RESIDENTS", "ALL_STAFF"] as const;
 export type Audience = (typeof audiences)[number];
@@ -17,9 +18,9 @@ export interface AnnouncementDetail extends AnnouncementSummary {
 }
 
 export const announcementSchema = z.object({
-  title: z.string().trim().min(1).max(160),
-  body: z.string().trim().min(1).max(4000),
-  audience: z.enum(audiences),
+  title: requiredText(160),
+  body: requiredText(4000),
+  audience: enumChoice(audiences),
 });
 export type NewAnnouncement = z.infer<typeof announcementSchema>;
 

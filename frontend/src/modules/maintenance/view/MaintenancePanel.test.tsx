@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { MaintenancePanel } from "./MaintenancePanel";
@@ -91,6 +91,197 @@ it("populates the form for editing and saves changes via updateCategory", async 
     responseHours: 4,
     resolutionHours: 48,
   });
+});
+
+it("rejects category targets outside the allowed ranges", async () => {
+  const vm = baseVm();
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Categories" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create category" }),
+  );
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  await user.type(within(dialog).getByLabelText("Category name"), "HVAC");
+  const response = within(dialog).getByLabelText("Response target (hours)");
+  await user.clear(response);
+  await user.type(response, "8761");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create category" }),
+  );
+  expect(
+    await within(dialog).findByText("Must be at most 8760"),
+  ).toBeInTheDocument();
+  expect(vm.createCategory).not.toHaveBeenCalled();
+});
+
+it("rejects a resolution target shorter than the response target", async () => {
+  const vm = baseVm();
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Categories" }));
+  const dialog = screen.getByRole("dialog");
+  await user.type(within(dialog).getByLabelText("Category name"), "HVAC");
+  const resolution = within(dialog).getByLabelText("Resolution target (hours)");
+  await user.clear(resolution);
+  await user.type(resolution, "2");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create category" }),
+  );
+  expect(
+    await within(dialog).findByText(
+      "Resolution target must not precede the response target",
+    ),
+  ).toBeInTheDocument();
+  expect(vm.createCategory).not.toHaveBeenCalled();
+});
+
+it("validates a vendor's email and linked account ID", async () => {
+  const vm = baseVm();
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Vendors" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Add vendor" }));
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  await user.type(within(dialog).getByLabelText("Vendor name"), "Acme");
+  await user.type(within(dialog).getByLabelText("Email (optional)"), "nope");
+  await user.type(
+    within(dialog).getByLabelText("Link to account ID (optional)"),
+    "not-a-uuid",
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Add vendor" }));
+  expect(
+    await within(dialog).findByText("Enter a valid email address"),
+  ).toBeInTheDocument();
+  expect(
+    within(dialog).getByText("Enter a valid account ID"),
+  ).toBeInTheDocument();
+  expect(vm.createVendor).not.toHaveBeenCalled();
+});
+
+it("requires a vendor before assigning and rejects a negative estimate", async () => {
+  const vm = baseVm({
+    requests: {
+      data: [
+        {
+          id: "req-1",
+          title: "Leaking tap",
+          impact: "MEDIUM",
+          danger: false,
+          suggested_priority: "MEDIUM",
+          priority: "MEDIUM",
+          status: "TRIAGED",
+          resolution_due_at: null,
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    },
+    vendors: { data: [{ id: "vendor-1", name: "Acme Plumbing" }] },
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Assign" }));
+  const dialog = screen.getByRole("dialog");
+  const estimate = within(dialog).getByLabelText("Estimated cost (optional)");
+  await user.type(estimate, "-5");
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  expect(
+    await within(dialog).findByText("Enter a valid amount"),
+  ).toBeInTheDocument();
+  await user.clear(estimate);
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  expect(await within(dialog).findByText("Select a vendor")).toBeInTheDocument();
+  expect(vm.assignVendor).not.toHaveBeenCalled();
+});
+
+it("collects the resolution summary in a validated dialog", async () => {
+  const resolve = vi.fn().mockResolvedValue(true);
+  const vm = baseVm({
+    resolve,
+    requests: {
+      data: [
+        {
+          id: "req-1",
+          title: "Leaking tap",
+          impact: "MEDIUM",
+          danger: false,
+          suggested_priority: "MEDIUM",
+          priority: "MEDIUM",
+          status: "IN_PROGRESS",
+          resolution_due_at: null,
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    },
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={false} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Resolve" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Resolve" }));
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(resolve).not.toHaveBeenCalled();
+  await user.type(
+    within(dialog).getByLabelText("Resolution summary"),
+    "Replaced the washer",
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Resolve" }));
+  await waitFor(() =>
+    expect(resolve).toHaveBeenCalledWith("req-1", "Replaced the washer"),
+  );
+});
+
+it("requires a reason to cancel a request", async () => {
+  const cancel = vi.fn().mockResolvedValue(true);
+  const vm = baseVm({
+    cancel,
+    requests: {
+      data: [
+        {
+          id: "req-1",
+          title: "Leaking tap",
+          impact: "MEDIUM",
+          danger: false,
+          suggested_priority: "MEDIUM",
+          priority: "MEDIUM",
+          status: "SUBMITTED",
+          resolution_due_at: null,
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    },
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Cancel request" }),
+  );
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(cancel).not.toHaveBeenCalled();
+  await user.type(
+    within(dialog).getByLabelText("Reason for cancelling"),
+    "Duplicate",
+  );
+  await user.click(
+    within(dialog).getByRole("button", { name: "Cancel request" }),
+  );
+  await waitFor(() => expect(cancel).toHaveBeenCalledWith("req-1", "Duplicate"));
 });
 
 it("cancels an in-progress edit without calling updateCategory", async () => {

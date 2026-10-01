@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Alert,
   Button,
@@ -13,8 +12,12 @@ import {
 } from "@mui/material";
 import type { Space } from "@/modules/buildings/model/buildings";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate, todayIso } from "@/shared/utils/dates";
-import type { MaintenanceCategory } from "../model/maintenance";
+import {
+  recurringPlanFormSchema,
+  type MaintenanceCategory,
+} from "../model/maintenance";
 import { useRecurringPlans } from "../viewmodel/useMaintenance";
 
 const emptyPlan = () => ({
@@ -22,7 +25,7 @@ const emptyPlan = () => ({
   categoryId: "",
   title: "",
   description: "",
-  intervalDays: 30,
+  intervalDays: "30",
   nextRunOn: todayIso(),
 });
 
@@ -40,7 +43,7 @@ export function RecurringPlansDialog({
   onClose: () => void;
 }) {
   const vm = useRecurringPlans(org, building);
-  const [plan, setPlan] = useState(emptyPlan);
+  const plan = useZodForm(recurringPlanFormSchema, emptyPlan());
   const spaceName = (id: string) =>
     spaces.find((space) => space.id === id)?.name ?? "Unknown space";
   const categoryName = (id: string) =>
@@ -76,73 +79,52 @@ export function RecurringPlansDialog({
           ))}
           <Divider />
           <Typography variant="subtitle2">Add a plan</Typography>
-          <TextField
-            select
-            label="Space"
-            value={plan.spaceId}
-            onChange={(e) => setPlan({ ...plan, spaceId: e.target.value })}
-          >
+          <TextField select label="Space" {...plan.field("spaceId")}>
             {spaces.map((space) => (
               <MenuItem key={space.id} value={space.id}>
                 {space.name} · {space.code}
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            select
-            label="Category"
-            value={plan.categoryId}
-            onChange={(e) => setPlan({ ...plan, categoryId: e.target.value })}
-          >
+          <TextField select label="Category" {...plan.field("categoryId")}>
             {categories.map((category) => (
               <MenuItem key={category.id} value={category.id}>
                 {category.name}
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            label="Title"
-            value={plan.title}
-            onChange={(e) => setPlan({ ...plan, title: e.target.value })}
-          />
+          <TextField label="Title" {...plan.field("title")} />
           <TextField
             label="Work to perform"
             multiline
             minRows={2}
-            value={plan.description}
-            onChange={(e) => setPlan({ ...plan, description: e.target.value })}
+            {...plan.field("description")}
           />
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
             <TextField
               label="Repeat every (days)"
               type="number"
-              value={plan.intervalDays}
-              onChange={(e) =>
-                setPlan({ ...plan, intervalDays: Number(e.target.value) })
-              }
               fullWidth
+              {...plan.field("intervalDays")}
             />
             <TextField
               label="First run"
               type="date"
-              value={plan.nextRunOn}
-              onChange={(e) => setPlan({ ...plan, nextRunOn: e.target.value })}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
+              {...plan.field("nextRunOn")}
             />
           </Stack>
           <Button
             variant="contained"
-            disabled={
-              vm.busy ||
-              !plan.spaceId ||
-              !plan.categoryId ||
-              !plan.title.trim() ||
-              !plan.description.trim()
-            }
-            onClick={() =>
-              void vm.create(plan).then((ok) => ok && setPlan(emptyPlan()))
-            }
+            disabled={vm.busy}
+            onClick={plan.submit(async (values) => {
+              if (await vm.create(values)) plan.reset(emptyPlan());
+            })}
           >
             Save plan
           </Button>

@@ -15,9 +15,12 @@ import {
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { Pager } from "@/shared/components/Pager";
 import { StatusChip } from "@/shared/components/Surface";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import {
   conditions,
+  inspectionFormSchema,
   inspectionTypes,
+  itemSchema,
   type Condition,
   type InspectionType,
 } from "../model/inspections";
@@ -29,13 +32,12 @@ import {
 } from "../viewmodel/useInspections";
 import { todayIso } from "@/shared/utils/dates";
 
-const emptyInspection = {
+const emptyInspection = () => ({
   spaceId: "",
-  leaseId: "",
   residentId: "",
   type: "MOVE_IN" as InspectionType,
   scheduledOn: todayIso(),
-};
+});
 
 export function InspectionsPanel({
   org,
@@ -49,7 +51,7 @@ export function InspectionsPanel({
   const spaces = useInspectionSpaces(org, building);
   const residents = useInspectionResidents(org, building);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [form, setForm] = useState(emptyInspection);
+  const form = useZodForm(inspectionFormSchema, emptyInspection());
   const [openInspection, setOpenInspection] = useState<string | null>(null);
   const error = vm.error || vm.list.error?.message;
 
@@ -81,7 +83,7 @@ export function InspectionsPanel({
         <Button
           variant="contained"
           onClick={() => {
-            setForm(emptyInspection);
+            form.reset(emptyInspection());
             setScheduleOpen(true);
           }}
         >
@@ -135,12 +137,7 @@ export function InspectionsPanel({
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              select
-              label="Space"
-              value={form.spaceId}
-              onChange={(e) => setForm({ ...form, spaceId: e.target.value })}
-            >
+            <TextField select label="Space" {...form.field("spaceId")}>
               {spaces.data?.map((item) => (
                 <MenuItem key={item.id} value={item.id}>
                   {item.name} · {item.code}
@@ -150,8 +147,7 @@ export function InspectionsPanel({
             <TextField
               select
               label="Resident (optional)"
-              value={form.residentId}
-              onChange={(e) => setForm({ ...form, residentId: e.target.value })}
+              {...form.field("residentId")}
             >
               <MenuItem value="">No resident</MenuItem>
               {residents.data?.map((item) => (
@@ -160,14 +156,7 @@ export function InspectionsPanel({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              select
-              label="Type"
-              value={form.type}
-              onChange={(e) =>
-                setForm({ ...form, type: e.target.value as InspectionType })
-              }
-            >
+            <TextField select label="Type" {...form.field("type")}>
               {inspectionTypes.map((type) => (
                 <MenuItem key={type} value={type}>
                   {type.replaceAll("_", " ")}
@@ -178,17 +167,14 @@ export function InspectionsPanel({
               label="Scheduled on"
               type="date"
               slotProps={{ inputLabel: { shrink: true } }}
-              value={form.scheduledOn}
-              onChange={(e) =>
-                setForm({ ...form, scheduledOn: e.target.value })
-              }
+              {...form.field("scheduledOn")}
             />
             <Button
               variant="contained"
-              disabled={vm.busy || !form.spaceId || !form.scheduledOn}
-              onClick={() =>
-                void vm.create(form).then((ok) => ok && setScheduleOpen(false))
-              }
+              disabled={vm.busy}
+              onClick={form.submit(async (values) => {
+                if (await vm.create(values)) setScheduleOpen(false);
+              })}
             >
               Schedule
             </Button>
@@ -221,9 +207,11 @@ function InspectionDetailDialog({
 }) {
   const detail = useInspectionDetail(org, building, inspection);
   const vm = useInspections(org, building, 0);
-  const [area, setArea] = useState("");
-  const [condition, setCondition] = useState<Condition>("GOOD");
-  const [notes, setNotes] = useState("");
+  const item = useZodForm(itemSchema, {
+    area: "",
+    condition: "GOOD" as Condition,
+    notes: "",
+  });
 
   return (
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
@@ -254,17 +242,8 @@ function InspectionDetailDialog({
             ))}
             {detail.detail.data.status === "DRAFT" && (
               <Stack spacing={1.5}>
-                <TextField
-                  label="Area"
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                />
-                <TextField
-                  select
-                  label="Condition"
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value as Condition)}
-                >
+                <TextField label="Area" {...item.field("area")} />
+                <TextField select label="Condition" {...item.field("condition")}>
                   {conditions.map((value) => (
                     <MenuItem key={value} value={value}>
                       {value}
@@ -273,22 +252,23 @@ function InspectionDetailDialog({
                 </TextField>
                 <TextField
                   label="Notes (optional)"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  {...item.field("notes")}
                 />
                 <Button
                   variant="outlined"
-                  disabled={detail.busy || !area.trim()}
-                  onClick={() =>
-                    void detail
-                      .addItem({ area, condition, notes: notes || undefined })
-                      .then((ok) => {
-                        if (ok) {
-                          setArea("");
-                          setNotes("");
-                        }
-                      })
-                  }
+                  disabled={detail.busy}
+                  onClick={item.submit(async (values) => {
+                    const ok = await detail.addItem({
+                      ...values,
+                      notes: values.notes || undefined,
+                    });
+                    if (ok)
+                      item.reset({
+                        area: "",
+                        condition: values.condition,
+                        notes: "",
+                      });
+                  })}
                 >
                   Add item
                 </Button>

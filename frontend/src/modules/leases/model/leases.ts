@@ -133,6 +133,15 @@ export const paymentFormSchema = z.object({
   receivedOn: requiredDate(),
 });
 
+/** Backend rule: at most the outstanding balance plus one month of rent. */
+export const onlinePaymentFormSchema = (ceiling: number) =>
+  z.object({
+    amount: requiredMoney({ min: 0.01 }).refine(
+      (amount) => Math.round(amount * 100) <= Math.round(ceiling * 100),
+      "Payment exceeds the outstanding balance plus one month of rent",
+    ),
+  });
+
 export const depositFormSchema = z.object({
   amount: requiredMoney(),
   heldOn: requiredDate(),

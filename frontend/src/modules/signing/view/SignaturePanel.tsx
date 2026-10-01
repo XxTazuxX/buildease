@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Alert,
   Button,
+  FormHelperText,
   Stack,
   TextField,
   ToggleButton,
@@ -9,7 +10,12 @@ import {
   Typography,
 } from "@mui/material";
 import { StatusChip } from "@/shared/components/Surface";
-import type { SignatureRole } from "../model/signatures";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  drawingError,
+  signFormSchema,
+  type SignatureRole,
+} from "../model/signatures";
 import { useSignature } from "../viewmodel/useSignature";
 import { SignaturePad } from "./SignaturePad";
 
@@ -29,9 +35,10 @@ export function SignaturePanel({
   canSign?: boolean;
 }) {
   const vm = useSignature(org, building, lease);
-  const [name, setName] = useState(defaultName);
+  const form = useZodForm(signFormSchema, { signedName: defaultName });
   const [style, setStyle] = useState<"typed" | "drawn">("typed");
   const [drawing, setDrawing] = useState<string | null>(null);
+  const [drawingProblem, setDrawingProblem] = useState<string | null>(null);
   const mine =
     role === "OWNER" ? vm.status.data?.owner : vm.status.data?.resident;
   const other =
@@ -72,25 +79,40 @@ export function SignaturePanel({
             <ToggleButton value="typed">Type</ToggleButton>
             <ToggleButton value="drawn">Draw</ToggleButton>
           </ToggleButtonGroup>
-          {style === "drawn" && <SignaturePad onChange={setDrawing} />}
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          {style === "drawn" && (
+            <>
+              <SignaturePad
+                onChange={(data) => {
+                  setDrawing(data);
+                  setDrawingProblem(null);
+                }}
+              />
+              {drawingProblem && (
+                <FormHelperText error>{drawingProblem}</FormHelperText>
+              )}
+            </>
+          )}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
             <TextField
               size="small"
               label="Type your full legal name to sign"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              {...form.field("signedName")}
               sx={{ flexGrow: 1 }}
             />
             <Button
               variant="contained"
-              disabled={
-                vm.busy || !name.trim() || (style === "drawn" && !drawing)
-              }
-              onClick={() =>
-                void (style === "drawn" && drawing
-                  ? vm.sign(role, name, drawing)
-                  : vm.sign(role, name))
-              }
+              disabled={vm.busy}
+              onClick={form.submit(async ({ signedName }) => {
+                if (style !== "drawn") return vm.sign(role, signedName);
+                const problem = drawingError(drawing);
+                setDrawingProblem(problem);
+                if (problem || !drawing) return;
+                return vm.sign(role, signedName, drawing);
+              })}
             >
               Sign lease
             </Button>

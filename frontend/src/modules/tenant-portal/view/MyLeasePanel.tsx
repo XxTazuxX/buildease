@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Alert,
   Button,
@@ -8,6 +8,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { onlinePaymentFormSchema } from "@/modules/leases/model/leases";
 import {
   useLeases,
   useLeaseDetail,
@@ -15,6 +16,7 @@ import {
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 import { SignaturePanel } from "@/modules/signing";
 import { QueryError } from "@/shared/components/QueryError";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate } from "@/shared/utils/dates";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -45,11 +47,13 @@ export function MyLeasePanel({
     );
   }, [vm.leases.data]);
   const detail = useLeaseDetail(org, building, lease?.id ?? "");
-  const [payAmount, setPayAmount] = useState("");
   const balance = detail.data ? Number(detail.data.balance) : 0;
+  const ceiling = Math.max(balance, 0) + Number(lease?.rent_amount ?? 0);
+  const pay = useZodForm(onlinePaymentFormSchema(ceiling), { amount: "" });
+  const { reset: resetPay } = pay;
   useEffect(() => {
-    if (balance > 0) setPayAmount(balance.toFixed(2));
-  }, [balance]);
+    if (balance > 0) resetPay({ amount: balance.toFixed(2) });
+  }, [balance, resetPay]);
   return (
     <Paper sx={{ p: { xs: 2, sm: 2.5 }, mb: 3 }}>
       <Typography variant="overline" color="primary.main">
@@ -126,18 +130,23 @@ export function MyLeasePanel({
               <Divider />
               <Typography variant="subtitle2">Pay rent online</Typography>
               {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                sx={{ alignItems: { sm: "flex-start" } }}
+              >
                 <TextField
                   size="small"
                   label="Amount"
                   type="number"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
+                  {...pay.field("amount")}
                 />
                 <Button
                   variant="contained"
-                  disabled={vm.busy || !payAmount || Number(payAmount) <= 0}
-                  onClick={() => void vm.payOnline(lease.id, Number(payAmount))}
+                  disabled={vm.busy}
+                  onClick={pay.submit((values) =>
+                    vm.payOnline(lease.id, values.amount),
+                  )}
                 >
                   Pay now
                 </Button>

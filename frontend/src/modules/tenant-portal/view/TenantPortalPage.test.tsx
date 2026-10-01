@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
@@ -131,6 +131,46 @@ it("shows a building selector when the tenant has more than one building", async
   ]);
   render(<TenantPortalPage org="org" />, { wrapper });
   expect(await screen.findByLabelText("Building")).toBeInTheDocument();
+});
+
+it("refuses an online payment above the balance plus one month of rent", async () => {
+  render(<TenantPortalPage org="org" />, { wrapper });
+  await screen.findByText("Flat 1 · F1");
+  const amount = screen.getByLabelText("Amount");
+  const user = userEvent.setup();
+  await user.clear(amount);
+  await user.type(amount, "1750.01");
+  await user.click(screen.getByRole("button", { name: "Pay now" }));
+  expect(
+    await screen.findByText(
+      "Payment exceeds the outstanding balance plus one month of rent",
+    ),
+  ).toBeInTheDocument();
+  expect(payOnline).not.toHaveBeenCalled();
+  await user.clear(amount);
+  await user.type(amount, "1750");
+  await user.click(screen.getByRole("button", { name: "Pay now" }));
+  await waitFor(() =>
+    expect(payOnline).toHaveBeenCalledWith("lease-1", 1750),
+  );
+});
+
+it("rejects a zero or over-precise online payment", async () => {
+  render(<TenantPortalPage org="org" />, { wrapper });
+  await screen.findByText("Flat 1 · F1");
+  const amount = screen.getByLabelText("Amount");
+  const user = userEvent.setup();
+  await user.clear(amount);
+  await user.type(amount, "0");
+  await user.click(screen.getByRole("button", { name: "Pay now" }));
+  expect(await screen.findByText("Must be at least 0.01")).toBeInTheDocument();
+  await user.clear(amount);
+  await user.type(amount, "10.123");
+  await user.click(screen.getByRole("button", { name: "Pay now" }));
+  expect(
+    await screen.findByText("Use at most 2 decimal places"),
+  ).toBeInTheDocument();
+  expect(payOnline).not.toHaveBeenCalled();
 });
 
 it("lets the resident pay their outstanding balance online", async () => {

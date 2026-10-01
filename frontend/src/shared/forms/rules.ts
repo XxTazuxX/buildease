@@ -35,6 +35,16 @@ export const optionalEmail = (max = 254) =>
       "Enter a valid email address",
     );
 
+/** A UUID typed by hand; blank is allowed (the field is omitted). */
+export const optionalUuid = (message = "Enter a valid ID") =>
+  z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || z.string().uuid().safeParse(value).success,
+      message,
+    );
+
 export const requiredChoice = (message = "Select an option") =>
   z.string().min(1, message);
 

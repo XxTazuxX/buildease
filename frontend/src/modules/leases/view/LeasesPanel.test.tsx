@@ -112,6 +112,146 @@ it("shows lifecycle controls for a manager and activates a draft lease", async (
   expect(vm.activate).toHaveBeenCalledWith("lease-1");
 });
 
+it("blocks an empty new lease and shows every required error", async () => {
+  const vm = baseVm({ leases: { data: [], error: null } });
+  vi.mocked(useLeases).mockReturnValue(vm);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={true}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "New lease" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create lease" }),
+  );
+  expect(await within(dialog).findByText("Select a resident")).toBeInTheDocument();
+  expect(within(dialog).getByText("Select a space")).toBeInTheDocument();
+  expect(within(dialog).getAllByText("Required")).toHaveLength(3);
+  expect(vm.create).not.toHaveBeenCalled();
+});
+
+it("flags a first charge date before the lease start", async () => {
+  const vm = baseVm({ leases: { data: [], error: null } });
+  vi.mocked(useLeases).mockReturnValue(vm);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={true}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "New lease" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByLabelText("Resident"));
+  await user.click(
+    await screen.findByRole("option", { name: "Alex Resident" }),
+  );
+  await user.click(within(dialog).getByLabelText("Rentable space"));
+  await user.click(await screen.findByRole("option", { name: "Flat 1 · F1" }));
+  await user.type(within(dialog).getByLabelText("Starts on"), "2026-02-01");
+  await user.type(within(dialog).getByLabelText("Monthly rent"), "1500.555");
+  await user.type(
+    within(dialog).getByLabelText("First charge on"),
+    "2026-01-15",
+  );
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create lease" }),
+  );
+  expect(
+    await within(dialog).findByText("Use at most 2 decimal places"),
+  ).toBeInTheDocument();
+  expect(vm.create).not.toHaveBeenCalled();
+  const rent = within(dialog).getByLabelText("Monthly rent");
+  await user.clear(rent);
+  await user.type(rent, "1500");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create lease" }),
+  );
+  expect(
+    await within(dialog).findByText(
+      "First charge date cannot precede the lease start",
+    ),
+  ).toBeInTheDocument();
+  expect(vm.create).not.toHaveBeenCalled();
+});
+
+it("rejects ending a lease before it started", async () => {
+  const vm = baseVm({
+    leases: { data: [{ ...draftLease, status: "ACTIVE" }], error: null },
+  });
+  vi.mocked(useLeases).mockReturnValue(vm);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={false}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "End lease" }));
+  const dialog = await screen.findByRole("dialog");
+  const endsOn = within(dialog).getByLabelText("Ends on");
+  await user.clear(endsOn);
+  await user.type(endsOn, "2025-12-31");
+  await user.click(within(dialog).getByRole("button", { name: "End lease" }));
+  expect(
+    await within(dialog).findByText("End date cannot be before the lease start"),
+  ).toBeInTheDocument();
+  expect(vm.end).not.toHaveBeenCalled();
+});
+
+it("validates a recorded payment and refund inside the lease detail", async () => {
+  const vm = baseVm();
+  vi.mocked(useLeases).mockReturnValue(vm);
+  vi.mocked(useLeaseDetail).mockReturnValue({
+    isLoading: false,
+    data: {
+      status: "ACTIVE",
+      balance: "0.00",
+      currency: "USD",
+      charges: [],
+      payments: [],
+      deposit: { status: "HELD", amount: "500.00" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={true}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "View" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Record payment" }),
+  );
+  expect(await within(dialog).findAllByText("Required")).toHaveLength(2);
+  expect(vm.recordPayment).not.toHaveBeenCalled();
+
+  await user.type(within(dialog).getByLabelText("Refund amount"), "600");
+  await user.type(within(dialog).getByLabelText("Refunded on"), "2026-03-01");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Refund deposit" }),
+  );
+  expect(
+    await within(dialog).findByText("Refund cannot exceed the held deposit"),
+  ).toBeInTheDocument();
+  expect(vm.refundDeposit).not.toHaveBeenCalled();
+});
+
 it("creates a lease with the typed values when an owner submits the new-lease form", async () => {
   const vm = baseVm({ leases: { data: [], error: null } });
   vi.mocked(useLeases).mockReturnValue(vm);

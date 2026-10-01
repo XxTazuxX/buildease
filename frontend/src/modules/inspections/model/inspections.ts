@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { api } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalText,
+  requiredChoice,
+  requiredDate,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const inspectionTypes = ["MOVE_IN", "MOVE_OUT", "ROUTINE"] as const;
 export type InspectionType = (typeof inspectionTypes)[number];
@@ -46,10 +53,17 @@ export const createInspectionSchema = z.object({
 });
 export type NewInspection = z.infer<typeof createInspectionSchema>;
 
+export const inspectionFormSchema = z.object({
+  spaceId: requiredChoice("Select a space"),
+  residentId: z.string(),
+  type: enumChoice(inspectionTypes),
+  scheduledOn: requiredDate(),
+});
+
 export const itemSchema = z.object({
-  area: z.string().trim().min(1).max(120),
-  condition: z.enum(conditions),
-  notes: z.string().trim().max(500).optional(),
+  area: requiredText(120),
+  condition: enumChoice(conditions),
+  notes: optionalText(500).optional(),
 });
 export type NewItem = z.infer<typeof itemSchema>;
 

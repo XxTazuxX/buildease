@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { InspectionsPanel } from "./InspectionsPanel";
@@ -66,6 +66,56 @@ it("lists scheduled inspections with their space and status", () => {
   expect(screen.getByText(/MOVE IN/)).toBeInTheDocument();
   expect(screen.getByText(/Flat 1/)).toBeInTheDocument();
   expect(screen.getByText("DRAFT")).toBeInTheDocument();
+});
+
+it("will not schedule an inspection without a space or date", async () => {
+  render(<InspectionsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Schedule inspection" }));
+  const dialog = await screen.findByRole("dialog");
+  const date = within(dialog).getByLabelText("Scheduled on");
+  await user.clear(date);
+  await user.click(within(dialog).getByRole("button", { name: "Schedule" }));
+  expect(await within(dialog).findByText("Select a space")).toBeInTheDocument();
+  expect(within(dialog).getByText("Required")).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+});
+
+it("validates a checklist item before adding it", async () => {
+  const addItem = vi.fn().mockResolvedValue(true);
+  vi.mocked(useInspectionDetail).mockReturnValue({
+    detail: {
+      data: {
+        id: "inspection-1",
+        status: "DRAFT",
+        items: [],
+        photos: [],
+        resident_acknowledged_at: null,
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    },
+    busy: false,
+    error: "",
+    addItem,
+    uploadPhoto: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<InspectionsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "View" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Add item" }));
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(addItem).not.toHaveBeenCalled();
+  await user.type(within(dialog).getByLabelText("Area"), "Kitchen");
+  await user.click(within(dialog).getByRole("button", { name: "Add item" }));
+  await waitFor(() => expect(addItem).toHaveBeenCalledTimes(1));
+  expect(addItem).toHaveBeenCalledWith({
+    area: "Kitchen",
+    condition: "GOOD",
+    notes: undefined,
+  });
 });
 
 it("schedules a new inspection for the selected space", async () => {

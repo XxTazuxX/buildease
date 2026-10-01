@@ -50,6 +50,20 @@ it("creates a key and reveals the plaintext value once", async () => {
   expect(await screen.findByText("plain-text-key")).toBeInTheDocument();
 });
 
+it("requires a key name of at most 120 characters", async () => {
+  render(<ApiKeysPanel org="org" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Create key" }));
+  expect(await screen.findByText("Required")).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+  await user.click(screen.getByLabelText("Key name"));
+  await user.paste("k".repeat(121));
+  expect(
+    await screen.findByText("Use at most 120 characters"),
+  ).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+});
+
 it("revokes a key", async () => {
   render(<ApiKeysPanel org="org" />);
   await userEvent.setup().click(screen.getByRole("button", { name: "Revoke" }));

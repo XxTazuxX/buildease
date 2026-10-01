@@ -65,6 +65,67 @@ it("lists draft listings with their space and status", () => {
   expect(screen.getByText("DRAFT")).toBeInTheDocument();
 });
 
+it("blocks a listing without a space, headline, description and rent", async () => {
+  const create = vi.fn().mockResolvedValue(true);
+  vi.mocked(useListings).mockReturnValue({
+    ...vi.mocked(useListings)("org", "building"),
+    create,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "New listing" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
+  expect(await within(dialog).findByText("Select a space")).toBeInTheDocument();
+  expect(within(dialog).getAllByText("Required")).toHaveLength(3);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it("rejects a zero rent and passes the numeric rent when valid", async () => {
+  const create = vi.fn().mockResolvedValue(true);
+  vi.mocked(useListings).mockReturnValue({
+    ...vi.mocked(useListings)("org", "building"),
+    create,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "New listing" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByLabelText("Space"));
+  await user.click(await screen.findByRole("option", { name: "Flat 1 · F1" }));
+  await user.type(within(dialog).getByLabelText("Headline"), "Bright 1BR");
+  await user.type(within(dialog).getByLabelText("Description"), "Sunny flat");
+  await user.type(within(dialog).getByLabelText("Monthly rent"), "0");
+  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
+  expect(await within(dialog).findByText("Must be at least 0.01")).toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+  const rent = within(dialog).getByLabelText("Monthly rent");
+  await user.clear(rent);
+  await user.type(rent, "1200.50");
+  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  expect(create).toHaveBeenCalledWith({
+    spaceId: "space-1",
+    headline: "Bright 1BR",
+    description: "Sunny flat",
+    rentAmount: 1200.5,
+  });
+});
+
+it("requires at least one channel before publishing", async () => {
+  render(<ListingsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Publish" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+  expect(
+    await within(dialog).findByText("Select at least one channel"),
+  ).toBeInTheDocument();
+  expect(publish).not.toHaveBeenCalled();
+});
+
 it("publishes a listing to the selected channels", async () => {
   render(<ListingsPanel org="org" building="building" />);
   const user = userEvent.setup();

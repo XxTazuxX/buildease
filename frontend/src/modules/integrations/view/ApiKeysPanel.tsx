@@ -9,11 +9,13 @@ import {
   Typography,
 } from "@mui/material";
 import { StatusChip } from "@/shared/components/Surface";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import { apiKeySchema } from "../model/integrations";
 import { useApiKeys } from "../viewmodel/useIntegrations";
 
 export function ApiKeysPanel({ org }: { org: string }) {
   const vm = useApiKeys(org);
-  const [name, setName] = useState("");
+  const form = useZodForm(apiKeySchema, { name: "" });
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const error = vm.error || vm.list.error?.message;
 
@@ -47,25 +49,24 @@ export function ApiKeysPanel({ org }: { org: string }) {
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={1.5}
-        sx={{ mt: 2 }}
+        sx={{ mt: 2, alignItems: { sm: "flex-start" } }}
       >
         <TextField
           label="Key name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          {...form.field("name")}
           sx={{ flexGrow: 1 }}
         />
         <Button
           variant="contained"
-          disabled={vm.busy || !name.trim()}
-          onClick={() =>
-            void vm.create(name).then((created) => {
-              if (created) {
-                setRevealedKey(created.key);
-                setName("");
-              }
-            })
-          }
+          disabled={vm.busy}
+          sx={{ minHeight: 56 }}
+          onClick={form.submit(async (values) => {
+            const created = await vm.create(values.name);
+            if (created) {
+              setRevealedKey(created.key);
+              form.reset();
+            }
+          })}
         >
           Create key
         </Button>

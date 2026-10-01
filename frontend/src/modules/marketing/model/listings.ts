@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { api, fetchAllPages } from "@/shared/api/client";
+import {
+  requiredChoice,
+  requiredMoney,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const listingChannels = ["ZILLOW", "APARTMENTS_COM"] as const;
 export type ListingChannel = (typeof listingChannels)[number];
@@ -41,6 +46,13 @@ export const newListingSchema = z.object({
   rentAmount: z.coerce.number().positive(),
 });
 export type NewListing = z.infer<typeof newListingSchema>;
+
+export const listingFormSchema = z.object({
+  spaceId: requiredChoice("Select a space"),
+  headline: requiredText(160),
+  description: requiredText(4000),
+  rentAmount: requiredMoney({ min: 0.01 }),
+});
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/listings`;

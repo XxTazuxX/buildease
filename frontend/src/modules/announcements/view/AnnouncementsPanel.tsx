@@ -10,7 +10,12 @@ import {
   Typography,
 } from "@mui/material";
 import { Pager } from "@/shared/components/Pager";
-import { audiences, type Audience } from "../model/announcements";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import {
+  announcementSchema,
+  audiences,
+  type Audience,
+} from "../model/announcements";
 import { useAnnouncements } from "../viewmodel/useAnnouncements";
 
 const audienceLabels: Record<Audience, string> = {
@@ -27,9 +32,11 @@ export function AnnouncementsPanel({
 }) {
   const [page, setPage] = useState(0);
   const vm = useAnnouncements(org, building, page);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [audience, setAudience] = useState<Audience>("ALL_RESIDENTS");
+  const form = useZodForm(announcementSchema, {
+    title: "",
+    body: "",
+    audience: "ALL_RESIDENTS" as Audience,
+  });
   const error = vm.error || vm.history.error?.message;
 
   return (
@@ -48,26 +55,14 @@ export function AnnouncementsPanel({
           </Alert>
         )}
         <Stack spacing={2} sx={{ mt: 2, maxWidth: 480 }}>
-          <TextField
-            label="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 160 } }}
-          />
+          <TextField label="Title" {...form.field("title")} />
           <TextField
             label="Message"
             multiline
             minRows={3}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 4000 } }}
+            {...form.field("body")}
           />
-          <TextField
-            select
-            label="Audience"
-            value={audience}
-            onChange={(e) => setAudience(e.target.value as Audience)}
-          >
+          <TextField select label="Audience" {...form.field("audience")}>
             {audiences.map((value) => (
               <MenuItem key={value} value={value}>
                 {audienceLabels[value]}
@@ -76,15 +71,15 @@ export function AnnouncementsPanel({
           </TextField>
           <Button
             variant="contained"
-            disabled={vm.busy || !title.trim() || !body.trim()}
-            onClick={() =>
-              void vm.send({ title, body, audience }).then((ok) => {
-                if (ok) {
-                  setTitle("");
-                  setBody("");
-                }
-              })
-            }
+            disabled={vm.busy}
+            onClick={form.submit(async (values) => {
+              if (await vm.send(values))
+                form.reset({
+                  title: "",
+                  body: "",
+                  audience: values.audience,
+                });
+            })}
           >
             Send announcement
           </Button>
