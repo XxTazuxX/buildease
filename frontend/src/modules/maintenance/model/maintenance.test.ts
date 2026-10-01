@@ -65,9 +65,9 @@ describe("maintenance form schemas", () => {
     expect(fails({ email: "nope" })).toBe(true);
     expect(fails({ phone: "1".repeat(41) })).toBe(true);
     expect(fails({ accountId: "not-a-uuid" })).toBe(true);
-    expect(
-      fails({ accountId: "11111111-1111-4111-8111-111111111111" }),
-    ).toBe(false);
+    expect(fails({ accountId: "11111111-1111-4111-8111-111111111111" })).toBe(
+      false,
+    );
   });
 
   it("limits comments, work notes, minutes and costs", () => {
@@ -83,7 +83,9 @@ describe("maintenance form schemas", () => {
         false,
       );
     expect(workCostFormSchema.parse({ actualCost: "0" }).actualCost).toBe(0);
-    expect(workCostFormSchema.safeParse({ actualCost: "" }).success).toBe(false);
+    expect(workCostFormSchema.safeParse({ actualCost: "" }).success).toBe(
+      false,
+    );
     expect(workCostFormSchema.safeParse({ actualCost: "-1" }).success).toBe(
       false,
     );
@@ -113,9 +115,9 @@ describe("photoProblem", () => {
     expect(photoProblem({ type: "image/png", size: 5 })).toBeNull();
     expect(photoProblem({ type: "image/png", size: 0 })).toMatch(/empty/);
     expect(photoProblem({ type: "text/plain", size: 5 })).toMatch(/JPEG/);
-    expect(photoProblem({ type: "image/webp", size: 10 * 1024 * 1024 + 1 })).toMatch(
-      /10 MB/,
-    );
+    expect(
+      photoProblem({ type: "image/webp", size: 10 * 1024 * 1024 + 1 }),
+    ).toMatch(/10 MB/);
   });
 });
 

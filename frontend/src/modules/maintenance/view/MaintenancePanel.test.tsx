@@ -198,7 +198,9 @@ it("requires a vendor before assigning and rejects a negative estimate", async (
   ).toBeInTheDocument();
   await user.clear(estimate);
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
-  expect(await within(dialog).findByText("Select a vendor")).toBeInTheDocument();
+  expect(
+    await within(dialog).findByText("Select a vendor"),
+  ).toBeInTheDocument();
   expect(vm.assignVendor).not.toHaveBeenCalled();
 });
 
@@ -281,7 +283,9 @@ it("requires a reason to cancel a request", async () => {
   await user.click(
     within(dialog).getByRole("button", { name: "Cancel request" }),
   );
-  await waitFor(() => expect(cancel).toHaveBeenCalledWith("req-1", "Duplicate"));
+  await waitFor(() =>
+    expect(cancel).toHaveBeenCalledWith("req-1", "Duplicate"),
+  );
 });
 
 it("cancels an in-progress edit without calling updateCategory", async () => {

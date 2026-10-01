@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  SIGNATURE_DATA_MAX,
-  drawingError,
-  signFormSchema,
-} from "./signatures";
+import { SIGNATURE_DATA_MAX, drawingError, signFormSchema } from "./signatures";
 
 describe("signFormSchema", () => {
   it("requires a signed name of at most 160 characters", () => {

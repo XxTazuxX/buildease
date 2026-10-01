@@ -40,13 +40,27 @@ it("shows a via-admin annotation only for impersonated actions", () => {
 });
 
 it("passes the typed organization filter through to the query", async () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
   render(<AuditLogPanel />);
   await userEvent
     .setup()
-    .type(screen.getByLabelText("Organization ID"), "org-123");
+    .type(screen.getByLabelText("Organization ID"), organizationId);
   expect(usePlatformAudit).toHaveBeenLastCalledWith(
     0,
-    "org-123",
+    organizationId,
+    undefined,
+    true,
+  );
+});
+
+it("flags a filter that is not a UUID and does not query with it", async () => {
+  render(<AuditLogPanel />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Actor ID"), "not-a-uuid");
+  expect(screen.getByText("Enter a valid ID (UUID)")).toBeInTheDocument();
+  expect(usePlatformAudit).toHaveBeenLastCalledWith(
+    0,
+    undefined,
     undefined,
     true,
   );

@@ -103,6 +103,50 @@ it("switches to the income statement tab and shows totals", async () => {
   ).toBeInTheDocument();
 });
 
+it("flags an end date before the start date, holds back the query and the export", async () => {
+  render(<ReportsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: "Income statement" }));
+  const from = screen.getByLabelText("From");
+  const to = screen.getByLabelText("To");
+  await user.clear(from);
+  await user.type(from, "2026-03-10");
+  await user.clear(to);
+  await user.type(to, "2026-03-01");
+  expect(
+    await screen.findByText("The end date cannot be before the start date"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+  expect(vi.mocked(useIncomeStatement)).toHaveBeenLastCalledWith(
+    "org",
+    "building",
+    "",
+    "",
+  );
+  await user.clear(to);
+  await user.type(to, "2026-03-31");
+  await vi.waitFor(() =>
+    expect(
+      screen.queryByText("The end date cannot be before the start date"),
+    ).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  expect(vi.mocked(useIncomeStatement)).toHaveBeenLastCalledWith(
+    "org",
+    "building",
+    "2026-03-10",
+    "2026-03-31",
+  );
+});
+
+it("asks for a start date on the maintenance report when it is cleared", async () => {
+  render(<ReportsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: "Maintenance" }));
+  await user.clear(screen.getByLabelText("From"));
+  expect(await screen.findByText("Required")).toBeInTheDocument();
+});
+
 it("prompts to select a lease on the statement tab before fetching", async () => {
   render(<ReportsPanel org="org" building="building" />);
   await userEvent

@@ -21,11 +21,49 @@ import {
   useReportExports,
 } from "../viewmodel/useReporting";
 import { todayIso } from "@/shared/utils/dates";
+import { dateRangeErrors } from "../model/reporting";
 
 // Local calendar dates; toISOString() would shift them across the UTC boundary.
 function firstOfMonthIso() {
   const now = new Date();
   return todayIso(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+function DateRangeFields({
+  from,
+  to,
+  errors,
+  onFrom,
+  onTo,
+}: {
+  from: string;
+  to: string;
+  errors: { from?: string; to?: string };
+  onFrom: (value: string) => void;
+  onTo: (value: string) => void;
+}) {
+  return (
+    <>
+      <TextField
+        label="From"
+        type="date"
+        slotProps={{ inputLabel: { shrink: true } }}
+        value={from}
+        onChange={(e) => onFrom(e.target.value)}
+        error={!!errors.from}
+        helperText={errors.from}
+      />
+      <TextField
+        label="To"
+        type="date"
+        slotProps={{ inputLabel: { shrink: true } }}
+        value={to}
+        onChange={(e) => onTo(e.target.value)}
+        error={!!errors.to}
+        helperText={errors.to}
+      />
+    </>
+  );
 }
 
 export function ReportsPanel({
@@ -137,27 +175,31 @@ function IncomeStatementTab({
 }) {
   const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
-  const query = useIncomeStatement(org, building, from, to);
+  const errors = dateRangeErrors(from, to);
+  const valid = !errors.from && !errors.to;
+  const query = useIncomeStatement(
+    org,
+    building,
+    valid ? from : "",
+    valid ? to : "",
+  );
   const exports = useReportExports(org, building);
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-        <TextField
-          label="From"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <TextField
-          label="To"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ alignItems: { sm: "flex-start" } }}
+      >
+        <DateRangeFields
+          from={from}
+          to={to}
+          errors={errors}
+          onFrom={setFrom}
+          onTo={setTo}
         />
         <Button
-          disabled={exports.busy}
+          disabled={exports.busy || !valid}
           onClick={() => void exports.exportIncomeStatement(from, to)}
         >
           Export CSV
@@ -195,10 +237,22 @@ function LeaseStatementTab({
   const [lease, setLease] = useState("");
   const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
-  const query = useLeaseStatement(org, building, lease, from, to);
+  const errors = dateRangeErrors(from, to);
+  const valid = !errors.from && !errors.to;
+  const query = useLeaseStatement(
+    org,
+    building,
+    lease,
+    valid ? from : "",
+    valid ? to : "",
+  );
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ alignItems: { sm: "flex-start" } }}
+      >
         <TextField
           select
           label="Lease"
@@ -212,19 +266,12 @@ function LeaseStatementTab({
             </MenuItem>
           ))}
         </TextField>
-        <TextField
-          label="From"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <TextField
-          label="To"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+        <DateRangeFields
+          from={from}
+          to={to}
+          errors={errors}
+          onFrom={setFrom}
+          onTo={setTo}
         />
       </Stack>
       {query.error && <Alert severity="error">{query.error.message}</Alert>}
@@ -308,23 +355,27 @@ function MaintenanceReportTab({
 }) {
   const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
-  const query = useMaintenanceReport(org, building, from, to);
+  const errors = dateRangeErrors(from, to);
+  const valid = !errors.from && !errors.to;
+  const query = useMaintenanceReport(
+    org,
+    building,
+    valid ? from : "",
+    valid ? to : "",
+  );
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-        <TextField
-          label="From"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <TextField
-          label="To"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ alignItems: { sm: "flex-start" } }}
+      >
+        <DateRangeFields
+          from={from}
+          to={to}
+          errors={errors}
+          onFrom={setFrom}
+          onTo={setTo}
         />
       </Stack>
       {query.error && <Alert severity="error">{query.error.message}</Alert>}

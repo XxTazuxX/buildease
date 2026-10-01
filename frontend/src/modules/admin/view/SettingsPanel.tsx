@@ -83,7 +83,8 @@ export function SettingsPanel() {
             type="password"
             {...form.field("password")}
             helperText={
-              form.error("password") ?? "Leave blank to keep the current password."
+              form.error("password") ??
+              "Leave blank to keep the current password."
             }
           />
           <TextField label="From address" {...form.field("from")} />

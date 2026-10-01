@@ -35,6 +35,9 @@ export const optionalEmail = (max = 254) =>
       "Enter a valid email address",
     );
 
+export const isUuid = (value: string) =>
+  z.string().uuid().safeParse(value).success;
+
 /** A UUID typed by hand; blank is allowed (the field is omitted). */
 export const optionalUuid = (message = "Enter a valid ID") =>
   z
@@ -72,15 +75,13 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 export function isIsoDate(value: string) {
   if (!ISO_DATE.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+  return (
+    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value)
+  );
 }
 
 export const requiredDate = (message = "Enter a valid date") =>
-  z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .refine(isIsoDate, message);
+  z.string().trim().min(1, "Required").refine(isIsoDate, message);
 
 export const optionalDate = (message = "Enter a valid date") =>
   z
@@ -183,9 +184,7 @@ const PASSWORD_MESSAGE = "Use 15–64 characters, at most 72 UTF-8 bytes";
 export function isValidPassword(value: string) {
   const length = [...value].length;
   return (
-    length >= 15 &&
-    length <= 64 &&
-    new TextEncoder().encode(value).length <= 72
+    length >= 15 && length <= 64 && new TextEncoder().encode(value).length <= 72
   );
 }
 

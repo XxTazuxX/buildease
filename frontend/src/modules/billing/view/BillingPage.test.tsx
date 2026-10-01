@@ -94,6 +94,49 @@ it("shows trial status, usage against limits and invoices", () => {
   expect(screen.getByText("BE-2026-000001")).toBeInTheDocument();
 });
 
+it("validates the billing email and field lengths before saving the profile", async () => {
+  const updateProfile = vi.fn().mockResolvedValue(true);
+  vi.mocked(useBilling).mockReturnValue({
+    ...vi.mocked(useBilling)("org"),
+    updateProfile,
+  } as unknown as ReturnType<typeof useBilling>);
+  const user = userEvent.setup();
+  render(<BillingPage org="org" />);
+  await user.type(screen.getByLabelText("Billing email"), "nope");
+  await user.click(screen.getByLabelText("Tax / VAT ID"));
+  await user.paste("t".repeat(61));
+  await user.click(
+    screen.getByRole("button", { name: "Save billing details" }),
+  );
+  expect(
+    await screen.findByText("Enter a valid email address"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Use at most 60 characters")).toBeInTheDocument();
+  expect(updateProfile).not.toHaveBeenCalled();
+});
+
+it("saves a valid billing profile and confirms it", async () => {
+  const updateProfile = vi.fn().mockResolvedValue(true);
+  vi.mocked(useBilling).mockReturnValue({
+    ...vi.mocked(useBilling)("org"),
+    updateProfile,
+  } as unknown as ReturnType<typeof useBilling>);
+  const user = userEvent.setup();
+  render(<BillingPage org="org" />);
+  await user.type(screen.getByLabelText("Billing email"), "billing@acme.test");
+  await user.type(screen.getByLabelText("Company name"), "Acme");
+  await user.click(
+    screen.getByRole("button", { name: "Save billing details" }),
+  );
+  expect(await screen.findByText("Saved")).toBeInTheDocument();
+  expect(updateProfile).toHaveBeenCalledWith({
+    billingEmail: "billing@acme.test",
+    billingName: "Acme",
+    billingAddress: "",
+    taxId: "",
+  });
+});
+
 it("requests a plan for the chosen billing cycle", async () => {
   const user = userEvent.setup();
   render(<BillingPage org="org" />);

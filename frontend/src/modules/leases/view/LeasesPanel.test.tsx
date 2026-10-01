@@ -129,7 +129,9 @@ it("blocks an empty new lease and shows every required error", async () => {
   await user.click(
     within(dialog).getByRole("button", { name: "Create lease" }),
   );
-  expect(await within(dialog).findByText("Select a resident")).toBeInTheDocument();
+  expect(
+    await within(dialog).findByText("Select a resident"),
+  ).toBeInTheDocument();
   expect(within(dialog).getByText("Select a space")).toBeInTheDocument();
   expect(within(dialog).getAllByText("Required")).toHaveLength(3);
   expect(vm.create).not.toHaveBeenCalled();
@@ -203,7 +205,9 @@ it("rejects ending a lease before it started", async () => {
   await user.type(endsOn, "2025-12-31");
   await user.click(within(dialog).getByRole("button", { name: "End lease" }));
   expect(
-    await within(dialog).findByText("End date cannot be before the lease start"),
+    await within(dialog).findByText(
+      "End date cannot be before the lease start",
+    ),
   ).toBeInTheDocument();
   expect(vm.end).not.toHaveBeenCalled();
 });

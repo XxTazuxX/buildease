@@ -369,11 +369,7 @@ export function BuildingConfigurationPanel({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              select
-              label="Level or zone"
-              {...space.field("levelId")}
-            >
+            <TextField select label="Level or zone" {...space.field("levelId")}>
               <MenuItem value="">Directly in building</MenuItem>
               {vm.levels.data?.map((item) => (
                 <MenuItem key={item.id} value={item.id}>

@@ -87,11 +87,15 @@ it("saves resident edits with the validated name", async () => {
   const dialog = await screen.findByRole("dialog");
   const name = within(dialog).getByLabelText("Resident name");
   await user.clear(name);
-  await user.click(within(dialog).getByRole("button", { name: "Save resident" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save resident" }),
+  );
   expect(await within(dialog).findByText("Required")).toBeInTheDocument();
   expect(update).not.toHaveBeenCalled();
   await user.type(name, "  Samuel ");
-  await user.click(within(dialog).getByRole("button", { name: "Save resident" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save resident" }),
+  );
   await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
   expect(update).toHaveBeenCalledWith("r1", {
     displayName: "Samuel",
@@ -110,7 +114,10 @@ it("collects a household member in a validated dialog instead of a prompt", asyn
   );
   expect(await within(dialog).findByText("Required")).toBeInTheDocument();
   expect(addHouseholdMember).not.toHaveBeenCalled();
-  await user.type(within(dialog).getByLabelText("Household member name"), "Kim");
+  await user.type(
+    within(dialog).getByLabelText("Household member name"),
+    "Kim",
+  );
   await user.click(within(dialog).getByLabelText("Relationship (optional)"));
   await user.paste("r".repeat(61));
   await user.click(

@@ -1,4 +1,15 @@
 import { api, downloadFile } from "@/shared/api/client";
+import { isIsoDate } from "@/shared/forms/rules";
+
+/** Mirrors the backend rule that a report's `to` date cannot precede `from`. */
+export function dateRangeErrors(from: string, to: string) {
+  const errors: { from?: string; to?: string } = {};
+  if (!isIsoDate(from)) errors.from = from ? "Enter a valid date" : "Required";
+  if (!isIsoDate(to)) errors.to = to ? "Enter a valid date" : "Required";
+  if (!errors.from && !errors.to && to < from)
+    errors.to = "The end date cannot be before the start date";
+  return errors;
+}
 
 export interface RentRollRow {
   lease_id: string;

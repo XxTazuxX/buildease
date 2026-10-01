@@ -92,7 +92,9 @@ it("requires a valid test recipient before sending", async () => {
   expect(await screen.findByText("Required")).toBeInTheDocument();
   await user.type(screen.getByLabelText("Recipient"), "bad");
   await user.click(screen.getByRole("button", { name: "Send test" }));
-  expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Enter a valid email address"),
+  ).toBeInTheDocument();
   expect(sendTest).not.toHaveBeenCalled();
 });
 
@@ -102,7 +104,9 @@ it("requires a template subject and body", async () => {
   await user.click(screen.getAllByRole("button", { name: "Edit" })[0]);
   const dialog = screen.getByRole("dialog");
   await user.clear(within(dialog).getByLabelText("Subject"));
-  await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save changes" }),
+  );
   expect(await within(dialog).findByText("Required")).toBeInTheDocument();
   expect(updateTemplate).not.toHaveBeenCalled();
 });

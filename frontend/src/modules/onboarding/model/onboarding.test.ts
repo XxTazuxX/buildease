@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { onboardingSchema } from "./onboarding";
 
-const blank = { email: "", displayName: "", organizationName: "", password: "" };
+const blank = {
+  email: "",
+  displayName: "",
+  organizationName: "",
+  password: "",
+};
 
 describe("onboardingSchema", () => {
   it("validates every registration field against the backend limits", () => {

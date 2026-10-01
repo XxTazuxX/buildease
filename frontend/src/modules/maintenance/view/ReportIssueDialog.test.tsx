@@ -24,8 +24,7 @@ beforeEach(() => {
   } as any;
 });
 
-const open = () =>
-  render(<ReportIssueDialog open onClose={vi.fn()} vm={vm} />);
+const open = () => render(<ReportIssueDialog open onClose={vi.fn()} vm={vm} />);
 
 it("blocks an empty report and shows each required field", async () => {
   open();

@@ -7,7 +7,8 @@ describe("loginSchema", () => {
     expect(loginSchema.safeParse({ ...ok, email: "" }).success).toBe(false);
     expect(loginSchema.safeParse({ ...ok, email: "nope" }).success).toBe(false);
     expect(
-      loginSchema.safeParse({ ...ok, email: `${"a".repeat(250)}@b.co` }).success,
+      loginSchema.safeParse({ ...ok, email: `${"a".repeat(250)}@b.co` })
+        .success,
     ).toBe(false);
     expect(loginSchema.safeParse({ ...ok, password: "" }).success).toBe(false);
     expect(

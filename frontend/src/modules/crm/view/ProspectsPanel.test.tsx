@@ -98,7 +98,9 @@ it("blocks a new prospect without a space or name and flags a bad email", async 
   await user.click(screen.getByRole("button", { name: "New prospect" }));
   const dialog = await screen.findByRole("dialog");
   await user.type(within(dialog).getByLabelText("Email (optional)"), "nope");
-  await user.click(within(dialog).getByRole("button", { name: "Add prospect" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Add prospect" }),
+  );
   expect(await within(dialog).findByText("Select a space")).toBeInTheDocument();
   expect(within(dialog).getByText("Required")).toBeInTheDocument();
   expect(

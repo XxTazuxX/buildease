@@ -23,19 +23,22 @@ import {
 } from "@mui/material";
 import { MetricCard } from "@/shared/components/Surface";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { PromptDialog } from "@/shared/components/PromptDialog";
 import { QueryError } from "@/shared/components/QueryError";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate } from "@/shared/utils/dates";
 import {
   billingCycles,
+  invoiceFormSchema,
   invoiceStatuses,
   limitLabel,
   money,
+  planFormSchema,
+  subscriptionFormSchema,
   subscriptionStatuses,
   type BillingCycle,
   type InvoiceStatus,
-  type NewInvoice,
   type Plan,
-  type PlanInput,
   type SubscriptionRow,
   type SubscriptionStatus,
 } from "../model/billing";
@@ -44,47 +47,359 @@ import { InvoiceDialog } from "./InvoiceDocument";
 import { InvoiceStatusChip, SubscriptionStatusChip } from "./InvoiceStatusChip";
 
 type Section = "subscriptions" | "invoices" | "plans";
+type PlatformVm = ReturnType<typeof usePlatformBilling>;
 
-const emptyPlan: PlanInput = {
+const emptyPlan = {
   code: "",
   name: "",
   description: "",
-  monthlyPrice: 0,
-  annualPrice: 0,
+  monthlyPrice: "0",
+  annualPrice: "0",
   currency: "USD",
-  maxBuildings: null,
-  maxSpaces: null,
-  maxStaff: null,
-  features: [],
-  trialDays: 0,
+  maxBuildings: "",
+  maxSpaces: "",
+  maxStaff: "",
+  features: "",
+  trialDays: "0",
   publiclyListed: true,
   active: true,
-  sortOrder: 10,
+  sortOrder: "10",
 };
 
-function planToInput(plan: Plan): PlanInput {
+const limitValue = (value: number | null | undefined) =>
+  value === null || value === undefined ? "" : String(value);
+
+function planToForm(plan: Plan) {
   return {
     code: plan.code,
     name: plan.name,
     description: plan.description ?? "",
-    monthlyPrice: Number(plan.monthly_price),
-    annualPrice: Number(plan.annual_price),
+    monthlyPrice: String(plan.monthly_price),
+    annualPrice: String(plan.annual_price),
     currency: plan.currency,
-    maxBuildings: plan.max_buildings,
-    maxSpaces: plan.max_spaces,
-    maxStaff: plan.max_staff,
-    features: plan.features,
-    trialDays: plan.trial_days,
+    maxBuildings: limitValue(plan.max_buildings),
+    maxSpaces: limitValue(plan.max_spaces),
+    maxStaff: limitValue(plan.max_staff),
+    features: plan.features.join("\n"),
+    trialDays: String(plan.trial_days),
     publiclyListed: plan.public,
     active: plan.active,
-    sortOrder: plan.sort_order,
+    sortOrder: String(plan.sort_order),
   };
 }
 
-const limitValue = (value: number | null | undefined) =>
-  value === null || value === undefined ? "" : String(value);
-const parseLimit = (value: string) =>
-  value.trim() === "" ? null : Number(value);
+function SubscriptionDialog({
+  row,
+  vm,
+  close,
+}: {
+  row: SubscriptionRow;
+  vm: PlatformVm;
+  close: () => void;
+}) {
+  const form = useZodForm(subscriptionFormSchema, {
+    planId: row.requested_plan_id ?? row.plan_id ?? "",
+    status: (row.status === "TRIALING" && row.requested_plan_id
+      ? "ACTIVE"
+      : (row.status ?? "ACTIVE")) as SubscriptionStatus,
+    cycle: (row.requested_cycle ??
+      row.billing_cycle ??
+      "MONTHLY") as BillingCycle,
+    trialEndsOn: row.trial_ends_on ?? "",
+    periodEnd: "",
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>{row.organization_name}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {vm.error && <Alert severity="error">{vm.error}</Alert>}
+          <TextField select label="Plan" {...form.field("planId")}>
+            {vm.plans.data?.map((plan) => (
+              <MenuItem key={plan.id} value={plan.id}>
+                {plan.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Status"
+            {...form.field("status")}
+            helperText={
+              form.values.status === "SUSPENDED"
+                ? "Suspending disables the organization for all of its users."
+                : undefined
+            }
+          >
+            {subscriptionStatuses.map((status) => (
+              <MenuItem key={status} value={status}>
+                {status.replace("_", " ")}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField select label="Billing cycle" {...form.field("cycle")}>
+            {billingCycles.map((cycle) => (
+              <MenuItem key={cycle} value={cycle}>
+                {cycle.toLowerCase()}
+              </MenuItem>
+            ))}
+          </TextField>
+          {form.values.status === "TRIALING" && (
+            <TextField
+              label="Trial ends"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              {...form.field("trialEndsOn")}
+            />
+          )}
+          <TextField
+            label="Current period ends (optional)"
+            type="date"
+            slotProps={{ inputLabel: { shrink: true } }}
+            {...form.field("periodEnd")}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button
+          variant="contained"
+          disabled={vm.busy}
+          onClick={form.submit(async (values) => {
+            if (await vm.assign(row.organization_id, values)) close();
+          })}
+        >
+          Save subscription
+        </Button>
+      </DialogActions>
+    </AdaptiveDialog>
+  );
+}
+
+function PlanDialog({
+  plan,
+  vm,
+  close,
+}: {
+  plan: Plan | null;
+  vm: PlatformVm;
+  close: () => void;
+}) {
+  const form = useZodForm(planFormSchema, plan ? planToForm(plan) : emptyPlan);
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="sm">
+      <DialogTitle>{plan ? "Edit plan" : "New plan"}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {vm.error && <Alert severity="error">{vm.error}</Alert>}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
+            <TextField
+              label="Code"
+              disabled={!!plan}
+              fullWidth
+              {...form.field("code")}
+            />
+            <TextField label="Name" fullWidth {...form.field("name")} />
+          </Stack>
+          <TextField label="Description" {...form.field("description")} />
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
+            <TextField
+              label="Monthly price"
+              type="number"
+              fullWidth
+              {...form.field("monthlyPrice")}
+            />
+            <TextField
+              label="Annual price"
+              type="number"
+              fullWidth
+              {...form.field("annualPrice")}
+            />
+            <TextField
+              label="Currency"
+              sx={{ width: { sm: 120 } }}
+              {...form.field("currency")}
+              onChange={(e) =>
+                form.setValue("currency", e.target.value.toUpperCase())
+              }
+            />
+          </Stack>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
+            {(
+              [
+                ["maxBuildings", "Max buildings"],
+                ["maxSpaces", "Max units"],
+                ["maxStaff", "Max staff seats"],
+              ] as const
+            ).map(([field, label]) => (
+              <TextField
+                key={field}
+                label={label}
+                type="number"
+                fullWidth
+                {...form.field(field)}
+                helperText={form.error(field) ?? "Blank = unlimited"}
+              />
+            ))}
+          </Stack>
+          <TextField
+            label="Features (one per line)"
+            multiline
+            minRows={3}
+            {...form.field("features")}
+          />
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
+            <TextField
+              label="Trial days"
+              type="number"
+              fullWidth
+              {...form.field("trialDays")}
+            />
+            <TextField
+              label="Sort order"
+              type="number"
+              fullWidth
+              {...form.field("sortOrder")}
+            />
+          </Stack>
+          <Stack direction="row" spacing={2}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={form.values.publiclyListed}
+                  onChange={(_, checked) =>
+                    form.setValue("publiclyListed", checked)
+                  }
+                />
+              }
+              label="Show on pricing page"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={form.values.active}
+                  onChange={(_, checked) => form.setValue("active", checked)}
+                />
+              }
+              label="Active"
+            />
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button
+          variant="contained"
+          disabled={vm.busy}
+          onClick={form.submit(async (values) => {
+            if (await vm.savePlan(plan?.id ?? null, values)) close();
+          })}
+        >
+          Save plan
+        </Button>
+      </DialogActions>
+    </AdaptiveDialog>
+  );
+}
+
+function InvoiceDraftDialog({
+  vm,
+  close,
+}: {
+  vm: PlatformVm;
+  close: () => void;
+}) {
+  const form = useZodForm(invoiceFormSchema, {
+    organizationId: "",
+    fromPlan: true,
+    description: "",
+    amount: "",
+    tax: "",
+    notes: "",
+  });
+  return (
+    <AdaptiveDialog open onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>New invoice</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {vm.error && <Alert severity="error">{vm.error}</Alert>}
+          <TextField
+            select
+            label="Organization"
+            {...form.field("organizationId")}
+          >
+            {vm.subscriptions.data?.map((row) => (
+              <MenuItem key={row.organization_id} value={row.organization_id}>
+                {row.organization_name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={form.values.fromPlan}
+                onChange={(_, checked) => form.setValue("fromPlan", checked)}
+              />
+            }
+            label="Bill the current plan and period"
+          />
+          {!form.values.fromPlan && (
+            <>
+              <TextField label="Description" {...form.field("description")} />
+              <TextField
+                label="Amount"
+                type="number"
+                {...form.field("amount")}
+              />
+            </>
+          )}
+          <TextField
+            label="Tax (optional)"
+            type="number"
+            {...form.field("tax")}
+          />
+          <TextField
+            label="Notes (optional)"
+            multiline
+            minRows={2}
+            {...form.field("notes")}
+          />
+          <Typography variant="caption" color="text.secondary">
+            The invoice is saved as a draft; issue it to email the customer.
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button
+          variant="contained"
+          disabled={vm.busy}
+          onClick={form.submit(async (values) => {
+            if (await vm.createInvoice(values)) close();
+          })}
+        >
+          Create draft
+        </Button>
+      </DialogActions>
+    </AdaptiveDialog>
+  );
+}
 
 export function PlatformBillingPanel() {
   const [section, setSection] = useState<Section>("subscriptions");
@@ -99,19 +414,12 @@ export function PlatformBillingPanel() {
     invoiceStatus: invoiceStatus || undefined,
   });
   const [managing, setManaging] = useState<SubscriptionRow | null>(null);
-  const [assignment, setAssignment] = useState({
-    planId: "",
-    status: "ACTIVE" as SubscriptionStatus,
-    cycle: "MONTHLY" as BillingCycle,
-    trialEndsOn: "",
-    periodEnd: "",
-  });
   const [editingPlan, setEditingPlan] = useState<{
-    id: string | null;
-    input: PlanInput;
-    features: string;
+    plan: Plan | null;
   } | null>(null);
-  const [newInvoice, setNewInvoice] = useState<NewInvoice | null>(null);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [voiding, setVoiding] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const summary = vm.summary.data;
   const currency = summary?.currency ?? "USD";
@@ -119,16 +427,6 @@ export function PlatformBillingPanel() {
   const openManage = (row: SubscriptionRow) => {
     vm.clearError();
     setManaging(row);
-    setAssignment({
-      planId: row.requested_plan_id ?? row.plan_id ?? "",
-      status:
-        row.status === "TRIALING" && row.requested_plan_id
-          ? "ACTIVE"
-          : (row.status ?? "ACTIVE"),
-      cycle: row.requested_cycle ?? row.billing_cycle ?? "MONTHLY",
-      trialEndsOn: row.trial_ends_on ?? "",
-      periodEnd: "",
-    });
   };
 
   return (
@@ -170,9 +468,12 @@ export function PlatformBillingPanel() {
         queries={[vm.summary, vm.plans, vm.subscriptions, vm.invoices]}
         what="billing data"
       />
-      {vm.error && !managing && !editingPlan && !newInvoice && (
-        <Alert severity="error">{vm.error}</Alert>
-      )}
+      {vm.error &&
+        !managing &&
+        !editingPlan &&
+        !creatingInvoice &&
+        !paying &&
+        !voiding && <Alert severity="error">{vm.error}</Alert>}
       <Paper sx={{ p: { xs: 2, sm: 2.5 }, overflowX: "auto" }}>
         <Tabs
           value={section}
@@ -326,14 +627,7 @@ export function PlatformBillingPanel() {
                 variant="contained"
                 onClick={() => {
                   vm.clearError();
-                  setNewInvoice({
-                    organizationId: "",
-                    fromPlan: true,
-                    description: "",
-                    amount: undefined,
-                    tax: undefined,
-                    notes: "",
-                  });
+                  setCreatingInvoice(true);
                 }}
               >
                 New invoice
@@ -383,15 +677,8 @@ export function PlatformBillingPanel() {
                           size="small"
                           disabled={vm.busy}
                           onClick={() => {
-                            const method = window.prompt(
-                              "Payment method (e.g. Bank transfer)",
-                              "Bank transfer",
-                            );
-                            if (method === null) return;
-                            const reference =
-                              window.prompt("Payment reference (optional)") ??
-                              "";
-                            void vm.pay(invoice.id, method, reference);
+                            vm.clearError();
+                            setPaying(invoice.id);
                           }}
                         >
                           Mark paid
@@ -405,9 +692,8 @@ export function PlatformBillingPanel() {
                           color="error"
                           disabled={vm.busy}
                           onClick={() => {
-                            const reason = window.prompt("Reason for voiding");
-                            if (reason !== null)
-                              void vm.voidInvoice(invoice.id, reason);
+                            vm.clearError();
+                            setVoiding(invoice.id);
                           }}
                         >
                           Void
@@ -433,7 +719,7 @@ export function PlatformBillingPanel() {
                 variant="contained"
                 onClick={() => {
                   vm.clearError();
-                  setEditingPlan({ id: null, input: emptyPlan, features: "" });
+                  setEditingPlan({ plan: null });
                 }}
               >
                 New plan
@@ -486,11 +772,7 @@ export function PlatformBillingPanel() {
                         size="small"
                         onClick={() => {
                           vm.clearError();
-                          setEditingPlan({
-                            id: plan.id,
-                            input: planToInput(plan),
-                            features: plan.features.join("\n"),
-                          });
+                          setEditingPlan({ plan });
                         }}
                       >
                         Edit
@@ -505,451 +787,72 @@ export function PlatformBillingPanel() {
       </Paper>
 
       {managing && (
-        <AdaptiveDialog
-          open
-          onClose={() => setManaging(null)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>{managing.organization_name}</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <TextField
-                select
-                label="Plan"
-                value={assignment.planId}
-                onChange={(e) =>
-                  setAssignment({ ...assignment, planId: e.target.value })
-                }
-              >
-                {vm.plans.data?.map((plan) => (
-                  <MenuItem key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                label="Status"
-                value={assignment.status}
-                onChange={(e) =>
-                  setAssignment({
-                    ...assignment,
-                    status: e.target.value as SubscriptionStatus,
-                  })
-                }
-                helperText={
-                  assignment.status === "SUSPENDED"
-                    ? "Suspending disables the organization for all of its users."
-                    : undefined
-                }
-              >
-                {subscriptionStatuses.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {status.replace("_", " ")}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                label="Billing cycle"
-                value={assignment.cycle}
-                onChange={(e) =>
-                  setAssignment({
-                    ...assignment,
-                    cycle: e.target.value as BillingCycle,
-                  })
-                }
-              >
-                {billingCycles.map((cycle) => (
-                  <MenuItem key={cycle} value={cycle}>
-                    {cycle.toLowerCase()}
-                  </MenuItem>
-                ))}
-              </TextField>
-              {assignment.status === "TRIALING" && (
-                <TextField
-                  label="Trial ends"
-                  type="date"
-                  value={assignment.trialEndsOn}
-                  onChange={(e) =>
-                    setAssignment({
-                      ...assignment,
-                      trialEndsOn: e.target.value,
-                    })
-                  }
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-              )}
-              <TextField
-                label="Current period ends (optional)"
-                type="date"
-                value={assignment.periodEnd}
-                onChange={(e) =>
-                  setAssignment({ ...assignment, periodEnd: e.target.value })
-                }
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setManaging(null)}>Cancel</Button>
-            <Button
-              variant="contained"
-              disabled={vm.busy || !assignment.planId}
-              onClick={() =>
-                void vm
-                  .assign(managing.organization_id, {
-                    planId: assignment.planId,
-                    status: assignment.status,
-                    cycle: assignment.cycle,
-                    trialEndsOn: assignment.trialEndsOn || undefined,
-                    periodEnd: assignment.periodEnd || undefined,
-                  })
-                  .then((ok) => ok && setManaging(null))
-              }
-            >
-              Save subscription
-            </Button>
-          </DialogActions>
-        </AdaptiveDialog>
+        <SubscriptionDialog
+          row={managing}
+          vm={vm}
+          close={() => setManaging(null)}
+        />
       )}
 
       {editingPlan && (
-        <AdaptiveDialog
-          open
-          onClose={() => setEditingPlan(null)}
-          fullWidth
-          maxWidth="sm"
-        >
-          <DialogTitle>{editingPlan.id ? "Edit plan" : "New plan"}</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <TextField
-                  label="Code"
-                  value={editingPlan.input.code}
-                  disabled={!!editingPlan.id}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: { ...editingPlan.input, code: e.target.value },
-                    })
-                  }
-                  fullWidth
-                />
-                <TextField
-                  label="Name"
-                  value={editingPlan.input.name}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: { ...editingPlan.input, name: e.target.value },
-                    })
-                  }
-                  fullWidth
-                />
-              </Stack>
-              <TextField
-                label="Description"
-                value={editingPlan.input.description}
-                onChange={(e) =>
-                  setEditingPlan({
-                    ...editingPlan,
-                    input: {
-                      ...editingPlan.input,
-                      description: e.target.value,
-                    },
-                  })
-                }
-              />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <TextField
-                  label="Monthly price"
-                  type="number"
-                  value={editingPlan.input.monthlyPrice}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: {
-                        ...editingPlan.input,
-                        monthlyPrice: Number(e.target.value),
-                      },
-                    })
-                  }
-                  fullWidth
-                />
-                <TextField
-                  label="Annual price"
-                  type="number"
-                  value={editingPlan.input.annualPrice}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: {
-                        ...editingPlan.input,
-                        annualPrice: Number(e.target.value),
-                      },
-                    })
-                  }
-                  fullWidth
-                />
-                <TextField
-                  label="Currency"
-                  value={editingPlan.input.currency}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: {
-                        ...editingPlan.input,
-                        currency: e.target.value.toUpperCase(),
-                      },
-                    })
-                  }
-                  sx={{ width: { sm: 120 } }}
-                />
-              </Stack>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                {(
-                  [
-                    ["maxBuildings", "Max buildings"],
-                    ["maxSpaces", "Max units"],
-                    ["maxStaff", "Max staff seats"],
-                  ] as const
-                ).map(([field, label]) => (
-                  <TextField
-                    key={field}
-                    label={label}
-                    type="number"
-                    helperText="Blank = unlimited"
-                    value={limitValue(editingPlan.input[field])}
-                    onChange={(e) =>
-                      setEditingPlan({
-                        ...editingPlan,
-                        input: {
-                          ...editingPlan.input,
-                          [field]: parseLimit(e.target.value),
-                        },
-                      })
-                    }
-                    fullWidth
-                  />
-                ))}
-              </Stack>
-              <TextField
-                label="Features (one per line)"
-                multiline
-                minRows={3}
-                value={editingPlan.features}
-                onChange={(e) =>
-                  setEditingPlan({ ...editingPlan, features: e.target.value })
-                }
-              />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <TextField
-                  label="Trial days"
-                  type="number"
-                  value={editingPlan.input.trialDays}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: {
-                        ...editingPlan.input,
-                        trialDays: Number(e.target.value),
-                      },
-                    })
-                  }
-                  fullWidth
-                />
-                <TextField
-                  label="Sort order"
-                  type="number"
-                  value={editingPlan.input.sortOrder}
-                  onChange={(e) =>
-                    setEditingPlan({
-                      ...editingPlan,
-                      input: {
-                        ...editingPlan.input,
-                        sortOrder: Number(e.target.value),
-                      },
-                    })
-                  }
-                  fullWidth
-                />
-              </Stack>
-              <Stack direction="row" spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={editingPlan.input.publiclyListed}
-                      onChange={(_, checked) =>
-                        setEditingPlan({
-                          ...editingPlan,
-                          input: {
-                            ...editingPlan.input,
-                            publiclyListed: checked,
-                          },
-                        })
-                      }
-                    />
-                  }
-                  label="Show on pricing page"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={editingPlan.input.active}
-                      onChange={(_, checked) =>
-                        setEditingPlan({
-                          ...editingPlan,
-                          input: { ...editingPlan.input, active: checked },
-                        })
-                      }
-                    />
-                  }
-                  label="Active"
-                />
-              </Stack>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEditingPlan(null)}>Cancel</Button>
-            <Button
-              variant="contained"
-              disabled={vm.busy}
-              onClick={() =>
-                void vm
-                  .savePlan(editingPlan.id, {
-                    ...editingPlan.input,
-                    features: editingPlan.features
-                      .split("\n")
-                      .map((line) => line.trim())
-                      .filter(Boolean),
-                  })
-                  .then((ok) => ok && setEditingPlan(null))
-              }
-            >
-              Save plan
-            </Button>
-          </DialogActions>
-        </AdaptiveDialog>
+        <PlanDialog
+          plan={editingPlan.plan}
+          vm={vm}
+          close={() => setEditingPlan(null)}
+        />
       )}
 
-      {newInvoice && (
-        <AdaptiveDialog
-          open
-          onClose={() => setNewInvoice(null)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>New invoice</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <TextField
-                select
-                label="Organization"
-                value={newInvoice.organizationId}
-                onChange={(e) =>
-                  setNewInvoice({
-                    ...newInvoice,
-                    organizationId: e.target.value,
-                  })
-                }
-              >
-                {vm.subscriptions.data?.map((row) => (
-                  <MenuItem
-                    key={row.organization_id}
-                    value={row.organization_id}
-                  >
-                    {row.organization_name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={newInvoice.fromPlan}
-                    onChange={(_, checked) =>
-                      setNewInvoice({ ...newInvoice, fromPlan: checked })
-                    }
-                  />
-                }
-                label="Bill the current plan and period"
-              />
-              {!newInvoice.fromPlan && (
-                <>
-                  <TextField
-                    label="Description"
-                    value={newInvoice.description}
-                    onChange={(e) =>
-                      setNewInvoice({
-                        ...newInvoice,
-                        description: e.target.value,
-                      })
-                    }
-                  />
-                  <TextField
-                    label="Amount"
-                    type="number"
-                    value={newInvoice.amount ?? ""}
-                    onChange={(e) =>
-                      setNewInvoice({
-                        ...newInvoice,
-                        amount:
-                          e.target.value === ""
-                            ? undefined
-                            : Number(e.target.value),
-                      })
-                    }
-                  />
-                </>
-              )}
-              <TextField
-                label="Tax (optional)"
-                type="number"
-                value={newInvoice.tax ?? ""}
-                onChange={(e) =>
-                  setNewInvoice({
-                    ...newInvoice,
-                    tax:
-                      e.target.value === ""
-                        ? undefined
-                        : Number(e.target.value),
-                  })
-                }
-              />
-              <TextField
-                label="Notes (optional)"
-                multiline
-                minRows={2}
-                value={newInvoice.notes}
-                onChange={(e) =>
-                  setNewInvoice({ ...newInvoice, notes: e.target.value })
-                }
-              />
-              <Typography variant="caption" color="text.secondary">
-                The invoice is saved as a draft; issue it to email the customer.
-              </Typography>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setNewInvoice(null)}>Cancel</Button>
-            <Button
-              variant="contained"
-              disabled={vm.busy || !newInvoice.organizationId}
-              onClick={() =>
-                void vm
-                  .createInvoice(newInvoice)
-                  .then((ok) => ok && setNewInvoice(null))
-              }
-            >
-              Create draft
-            </Button>
-          </DialogActions>
-        </AdaptiveDialog>
+      {creatingInvoice && (
+        <InvoiceDraftDialog vm={vm} close={() => setCreatingInvoice(false)} />
+      )}
+
+      {paying && (
+        <PromptDialog
+          title="Mark invoice paid"
+          fields={[
+            {
+              name: "method",
+              label: "Payment method",
+              max: 40,
+              optional: true,
+              defaultValue: "Bank transfer",
+            },
+            {
+              name: "reference",
+              label: "Payment reference (optional)",
+              max: 120,
+              optional: true,
+            },
+          ]}
+          label="Mark paid"
+          error={vm.error}
+          onClose={() => setPaying(null)}
+          onSubmit={async (values) => {
+            if (await vm.pay(paying, values.method, values.reference))
+              setPaying(null);
+          }}
+        />
+      )}
+
+      {voiding && (
+        <PromptDialog
+          title="Void invoice"
+          fields={[
+            {
+              name: "reason",
+              label: "Reason for voiding (optional)",
+              max: 1000,
+              optional: true,
+              multiline: true,
+            },
+          ]}
+          label="Void invoice"
+          error={vm.error}
+          onClose={() => setVoiding(null)}
+          onSubmit={async (values) => {
+            if (await vm.voidInvoice(voiding, values.reason)) setVoiding(null);
+          }}
+        />
       )}
 
       {viewing && (

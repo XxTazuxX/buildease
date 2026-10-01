@@ -150,9 +150,7 @@ it("refuses an online payment above the balance plus one month of rent", async (
   await user.clear(amount);
   await user.type(amount, "1750");
   await user.click(screen.getByRole("button", { name: "Pay now" }));
-  await waitFor(() =>
-    expect(payOnline).toHaveBeenCalledWith("lease-1", 1750),
-  );
+  await waitFor(() => expect(payOnline).toHaveBeenCalledWith("lease-1", 1750));
 });
 
 it("rejects a zero or over-precise online payment", async () => {

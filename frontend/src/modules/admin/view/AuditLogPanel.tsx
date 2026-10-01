@@ -8,17 +8,23 @@ import {
   Typography,
 } from "@mui/material";
 import { Pager } from "@/shared/components/Pager";
+import { isUuid } from "@/shared/forms/rules";
 import { useOrgAudit, usePlatformAudit } from "../viewmodel/useAdmin";
+
+const idProblem = (value: string) =>
+  value.trim() !== "" && !isUuid(value.trim()) ? "Enter a valid ID (UUID)" : "";
 
 /** Platform-wide audit trail, or a single organization's trail when `org` is given. */
 export function AuditLogPanel({ org }: { org?: string } = {}) {
   const [page, setPage] = useState(0);
   const [organizationId, setOrganizationId] = useState("");
   const [actorId, setActorId] = useState("");
+  const organizationProblem = idProblem(organizationId);
+  const actorProblem = idProblem(actorId);
   const platformQuery = usePlatformAudit(
     page,
-    organizationId || undefined,
-    actorId || undefined,
+    organizationProblem ? undefined : organizationId.trim() || undefined,
+    actorProblem ? undefined : actorId.trim() || undefined,
     !org,
   );
   const orgQuery = useOrgAudit(org ?? "", page);
@@ -47,6 +53,8 @@ export function AuditLogPanel({ org }: { org?: string } = {}) {
                 setOrganizationId(e.target.value);
                 setPage(0);
               }}
+              error={!!organizationProblem}
+              helperText={organizationProblem || undefined}
               sx={{ flexGrow: 1 }}
             />
             <TextField
@@ -56,6 +64,8 @@ export function AuditLogPanel({ org }: { org?: string } = {}) {
                 setActorId(e.target.value);
                 setPage(0);
               }}
+              error={!!actorProblem}
+              helperText={actorProblem || undefined}
               sx={{ flexGrow: 1 }}
             />
           </Stack>

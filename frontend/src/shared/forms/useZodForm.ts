@@ -17,7 +17,9 @@ export function useZodForm<S extends z.ZodTypeAny>(
   defaultValues: z.input<S>,
 ) {
   const form = useForm<Input<S>, unknown, z.output<S>>({
-    resolver: zodResolver(schema as z.ZodType<z.output<S>, z.ZodTypeDef, Input<S>>),
+    resolver: zodResolver(
+      schema as z.ZodType<z.output<S>, z.ZodTypeDef, Input<S>>,
+    ),
     defaultValues: defaultValues as DefaultValues<Input<S>>,
   });
   const initial = useRef(defaultValues);
@@ -44,7 +46,9 @@ export function useZodForm<S extends z.ZodTypeAny>(
   };
 
   const setValue = (name: Name<S>, value: unknown) => {
-    form.setValue(name as Path<Input<S>>, value as never, { shouldDirty: true });
+    form.setValue(name as Path<Input<S>>, value as never, {
+      shouldDirty: true,
+    });
     revalidate(name);
   };
 
@@ -53,13 +57,16 @@ export function useZodForm<S extends z.ZodTypeAny>(
     field: (name: Name<S>) => ({
       name,
       value: (values[name] ?? "") as string,
-      onChange: (
-        event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-      ) => setValue(name, event.target.value),
+      onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setValue(name, event.target.value),
       onBlur: () => {
-        form.setValue(name as Path<Input<S>>, form.getValues(name as Path<Input<S>>), {
-          shouldTouch: true,
-        });
+        form.setValue(
+          name as Path<Input<S>>,
+          form.getValues(name as Path<Input<S>>),
+          {
+            shouldTouch: true,
+          },
+        );
         void form.trigger(name as Path<Input<S>>);
       },
       error: message(name) !== undefined,

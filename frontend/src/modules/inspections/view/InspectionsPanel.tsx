@@ -243,17 +243,18 @@ function InspectionDetailDialog({
             {detail.detail.data.status === "DRAFT" && (
               <Stack spacing={1.5}>
                 <TextField label="Area" {...item.field("area")} />
-                <TextField select label="Condition" {...item.field("condition")}>
+                <TextField
+                  select
+                  label="Condition"
+                  {...item.field("condition")}
+                >
                   {conditions.map((value) => (
                     <MenuItem key={value} value={value}>
                       {value}
                     </MenuItem>
                   ))}
                 </TextField>
-                <TextField
-                  label="Notes (optional)"
-                  {...item.field("notes")}
-                />
+                <TextField label="Notes (optional)" {...item.field("notes")} />
                 <Button
                   variant="outlined"
                   disabled={detail.busy}

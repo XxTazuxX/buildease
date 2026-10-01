@@ -211,7 +211,11 @@ export function LeasesPanel({
         <DialogTitle>New lease</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField select label="Resident" {...newLease.field("residentId")}>
+            <TextField
+              select
+              label="Resident"
+              {...newLease.field("residentId")}
+            >
               {vm.residents.data
                 ?.filter((item) => item.active)
                 .map((item) => (

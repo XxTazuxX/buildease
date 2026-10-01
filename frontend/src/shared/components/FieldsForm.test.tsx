@@ -30,7 +30,9 @@ describe("FieldsForm", () => {
       await screen.findByText("Use at most 5 characters"),
     ).toBeInTheDocument();
     expect(screen.getByText("Enter a valid email address")).toBeInTheDocument();
-    expect(screen.getByText("Letters, digits, - or _ only")).toBeInTheDocument();
+    expect(
+      screen.getByText("Letters, digits, - or _ only"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Use 15–64 characters, at most 72 UTF-8 bytes"),
     ).toBeInTheDocument();

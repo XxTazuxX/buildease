@@ -16,6 +16,7 @@ export interface Field {
   optional?: boolean;
   password?: boolean;
   max?: number;
+  defaultValue?: string;
   multiline?: boolean;
   pattern?: RegExp;
   patternMessage?: string;
@@ -51,7 +52,9 @@ export function FieldsForm({
   for (const f of fields) shape[f.name] = ruleFor(f);
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(z.object(shape)),
-    defaultValues: Object.fromEntries(fields.map((f) => [f.name, ""])),
+    defaultValues: Object.fromEntries(
+      fields.map((f) => [f.name, f.defaultValue ?? ""]),
+    ),
   });
   const [error, setError] = useState("");
   return (

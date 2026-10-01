@@ -68,14 +68,16 @@ describe("configurationFormSchema", () => {
 
 describe("levelFormSchema", () => {
   it("requires a name and a code matching [A-Za-z0-9_-]{1,40}", () => {
-    expect(levelFormSchema.parse({ name: "L1", code: "L-1", sortOrder: "" }))
-      .toMatchObject({ sortOrder: 0 });
+    expect(
+      levelFormSchema.parse({ name: "L1", code: "L-1", sortOrder: "" }),
+    ).toMatchObject({ sortOrder: 0 });
     for (const code of ["", "has space", "x".repeat(41)])
       expect(
         levelFormSchema.safeParse({ name: "L1", code, sortOrder: "0" }).success,
       ).toBe(false);
     expect(
-      levelFormSchema.safeParse({ name: "", code: "a", sortOrder: "0" }).success,
+      levelFormSchema.safeParse({ name: "", code: "a", sortOrder: "0" })
+        .success,
     ).toBe(false);
   });
   it("limits the display order to -1000..1000", () => {

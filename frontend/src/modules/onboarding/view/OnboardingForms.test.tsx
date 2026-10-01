@@ -54,7 +54,9 @@ it("blocks a registration with an invalid email, blank names and a short passwor
   await user.type(screen.getByLabelText("Email"), "nope");
   await user.type(screen.getByLabelText("Password"), "short");
   await user.click(screen.getByRole("button", { name: "Continue" }));
-  expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Enter a valid email address"),
+  ).toBeInTheDocument();
   expect(screen.getAllByText("Required")).toHaveLength(2);
   expect(
     screen.getByText("Use 15–64 characters, at most 72 UTF-8 bytes"),

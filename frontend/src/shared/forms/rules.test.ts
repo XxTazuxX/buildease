@@ -33,7 +33,9 @@ describe("text rules", () => {
 
   it("validates email format, length and optionality", () => {
     expect(message(requiredEmail(), "")).toBe("Required");
-    expect(message(requiredEmail(), "nope")).toBe("Enter a valid email address");
+    expect(message(requiredEmail(), "nope")).toBe(
+      "Enter a valid email address",
+    );
     expect(message(requiredEmail(20), "someone@example.com.au")).toBe(
       "Use at most 20 characters",
     );
@@ -117,7 +119,9 @@ describe("integer rules (Min/Max)", () => {
     expect(message(days, "91")).toBe("Must be at most 90");
     expect(days.parse("30")).toBe(30);
     expect(optionalInteger({ min: 1 }).parse("")).toBeUndefined();
-    expect(message(optionalInteger({ min: 1 }), "0")).toBe("Must be at least 1");
+    expect(message(optionalInteger({ min: 1 }), "0")).toBe(
+      "Must be at least 1",
+    );
   });
 });
 

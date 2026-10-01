@@ -12,6 +12,8 @@ import {
   Typography,
 } from "@mui/material";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
+import { useZodForm } from "@/shared/forms/useZodForm";
+import { commentFormSchema } from "@/modules/maintenance/model/maintenance";
 import {
   useMaintenance,
   useRequestDetail,
@@ -32,7 +34,9 @@ export function MyMaintenancePanel({
   const mySpace = vm.spaces.data?.filter((s) => s.id === mySpaceId);
   const [createOpen, setCreateOpen] = useState(false);
   const [openRequest, setOpenRequest] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
+  const comment = useZodForm(commentFormSchema.pick({ body: true }), {
+    body: "",
+  });
   const detail = useRequestDetail(org, building, openRequest ?? "");
   const error = vm.error || vm.requests.error?.message;
   return (
@@ -155,7 +159,7 @@ export function MyMaintenancePanel({
         open={!!openRequest}
         onClose={() => {
           setOpenRequest(null);
-          setCommentText("");
+          comment.reset();
         }}
         fullWidth
         maxWidth="sm"
@@ -178,15 +182,14 @@ export function MyMaintenancePanel({
               label="Add a comment"
               multiline
               minRows={2}
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
+              {...comment.field("body")}
             />
             <Button
               variant="contained"
-              disabled={!commentText.trim()}
-              onClick={() =>
-                void detail.comment(commentText).then(() => setCommentText(""))
-              }
+              onClick={comment.submit(async (values) => {
+                await detail.comment(values.body);
+                comment.reset();
+              })}
             >
               Post comment
             </Button>

@@ -16,8 +16,10 @@ import {
 } from "@mui/material";
 import { PageHeader } from "@/shared/components/Surface";
 import { QueryError } from "@/shared/components/QueryError";
+import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate } from "@/shared/utils/dates";
 import {
+  billingProfileSchema,
   money,
   type BillingCycle,
   type BillingOverview,
@@ -82,52 +84,41 @@ function ProfileForm({
   busy: boolean;
   onSave: (profile: BillingProfile) => Promise<boolean>;
 }) {
-  const initial = {
+  const profile = useZodForm(billingProfileSchema, {
     billingEmail: overview.billing_email ?? "",
     billingName: overview.billing_name ?? "",
     billingAddress: overview.billing_address ?? "",
     taxId: overview.tax_id ?? "",
-  };
-  const [profile, setProfile] = useState(initial);
+  });
   const [saved, setSaved] = useState(false);
-  useEffect(() => setSaved(false), [profile]);
+  const snapshot = JSON.stringify(profile.values);
+  useEffect(() => setSaved(false), [snapshot]);
   return (
     <Stack spacing={2}>
       <TextField
         label="Billing email"
         type="email"
-        helperText="Invoices are sent here. Leave blank to email all owners."
-        value={profile.billingEmail}
-        onChange={(e) =>
-          setProfile({ ...profile, billingEmail: e.target.value })
+        {...profile.field("billingEmail")}
+        helperText={
+          profile.error("billingEmail") ??
+          "Invoices are sent here. Leave blank to email all owners."
         }
       />
-      <TextField
-        label="Company name"
-        value={profile.billingName}
-        onChange={(e) =>
-          setProfile({ ...profile, billingName: e.target.value })
-        }
-      />
+      <TextField label="Company name" {...profile.field("billingName")} />
       <TextField
         label="Billing address"
         multiline
         minRows={2}
-        value={profile.billingAddress}
-        onChange={(e) =>
-          setProfile({ ...profile, billingAddress: e.target.value })
-        }
+        {...profile.field("billingAddress")}
       />
-      <TextField
-        label="Tax / VAT ID"
-        value={profile.taxId}
-        onChange={(e) => setProfile({ ...profile, taxId: e.target.value })}
-      />
+      <TextField label="Tax / VAT ID" {...profile.field("taxId")} />
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
         <Button
           variant="contained"
           disabled={busy}
-          onClick={() => void onSave(profile).then(setSaved)}
+          onClick={profile.submit(async (values) =>
+            setSaved(await onSave(values)),
+          )}
         >
           Save billing details
         </Button>

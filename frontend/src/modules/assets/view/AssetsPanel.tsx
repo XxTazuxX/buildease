@@ -303,7 +303,11 @@ function AssetDetailDialog({
                 {new Date(reading.recorded_at).toLocaleString()}
               </Typography>
             ))}
-            <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: "flex-start" }}
+            >
               <TextField
                 size="small"
                 label="Value"

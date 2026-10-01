@@ -17,9 +17,9 @@ describe("inspectionFormSchema", () => {
     expect(
       inspectionFormSchema.safeParse({ ...valid, spaceId: "" }).success,
     ).toBe(false);
-    expect(
-      inspectionFormSchema.safeParse({ ...valid, type: "" }).success,
-    ).toBe(false);
+    expect(inspectionFormSchema.safeParse({ ...valid, type: "" }).success).toBe(
+      false,
+    );
     expect(
       inspectionFormSchema.safeParse({ ...valid, scheduledOn: "" }).success,
     ).toBe(false);
@@ -38,9 +38,9 @@ describe("itemSchema limits", () => {
     expect(itemSchema.safeParse({ ...ok, area: "a".repeat(121) }).success).toBe(
       false,
     );
-    expect(itemSchema.safeParse({ ...ok, notes: "n".repeat(501) }).success).toBe(
-      false,
-    );
+    expect(
+      itemSchema.safeParse({ ...ok, notes: "n".repeat(501) }).success,
+    ).toBe(false);
     expect(itemSchema.safeParse({ ...ok, condition: "" }).success).toBe(false);
   });
 });

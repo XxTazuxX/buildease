@@ -3,9 +3,9 @@ import { assetSchema, meterReadingSchema } from "./assets";
 
 describe("meterReadingSchema", () => {
   it("parses a decimal value to a number and requires a unit", () => {
-    expect(meterReadingSchema.parse({ value: "1200.5", unit: "hours" })).toEqual(
-      { value: 1200.5, unit: "hours" },
-    );
+    expect(
+      meterReadingSchema.parse({ value: "1200.5", unit: "hours" }),
+    ).toEqual({ value: 1200.5, unit: "hours" });
     expect(meterReadingSchema.safeParse({ value: "", unit: "h" }).success).toBe(
       false,
     );

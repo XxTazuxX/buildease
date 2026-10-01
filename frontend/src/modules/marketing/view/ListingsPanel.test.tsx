@@ -76,7 +76,9 @@ it("blocks a listing without a space, headline, description and rent", async () 
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "New listing" }));
   const dialog = await screen.findByRole("dialog");
-  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create listing" }),
+  );
   expect(await within(dialog).findByText("Select a space")).toBeInTheDocument();
   expect(within(dialog).getAllByText("Required")).toHaveLength(3);
   expect(create).not.toHaveBeenCalled();
@@ -98,13 +100,19 @@ it("rejects a zero rent and passes the numeric rent when valid", async () => {
   await user.type(within(dialog).getByLabelText("Headline"), "Bright 1BR");
   await user.type(within(dialog).getByLabelText("Description"), "Sunny flat");
   await user.type(within(dialog).getByLabelText("Monthly rent"), "0");
-  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
-  expect(await within(dialog).findByText("Must be at least 0.01")).toBeInTheDocument();
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create listing" }),
+  );
+  expect(
+    await within(dialog).findByText("Must be at least 0.01"),
+  ).toBeInTheDocument();
   expect(create).not.toHaveBeenCalled();
   const rent = within(dialog).getByLabelText("Monthly rent");
   await user.clear(rent);
   await user.type(rent, "1200.50");
-  await user.click(within(dialog).getByRole("button", { name: "Create listing" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Create listing" }),
+  );
   await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
   expect(create).toHaveBeenCalledWith({
     spaceId: "space-1",

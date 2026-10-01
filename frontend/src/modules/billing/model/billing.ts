@@ -1,5 +1,18 @@
 import { z } from "zod";
 import { api, publicApi } from "@/shared/api/client";
+import {
+  enumChoice,
+  optionalDate,
+  optionalEmail,
+  optionalInteger,
+  optionalMoney,
+  optionalText,
+  requiredChoice,
+  requiredInteger,
+  requiredMoney,
+  requiredPattern,
+  requiredText,
+} from "@/shared/forms/rules";
 
 export const subscriptionStatuses = [
   "TRIALING",
@@ -153,21 +166,95 @@ export interface RevenueSummary {
 }
 
 export const billingProfileSchema = z.object({
-  billingEmail: z
-    .string()
-    .trim()
-    .max(254)
-    .refine(
-      (value) => value === "" || z.string().email().safeParse(value).success,
-      {
-        message: "Enter a valid email address",
-      },
-    ),
-  billingName: z.string().trim().max(160),
-  billingAddress: z.string().trim().max(500),
-  taxId: z.string().trim().max(60),
+  billingEmail: optionalEmail(254),
+  billingName: optionalText(160),
+  billingAddress: optionalText(500),
+  taxId: optionalText(60),
 });
 export type BillingProfile = z.infer<typeof billingProfileSchema>;
+
+const featureLines = (value: string) =>
+  value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+const limitField = optionalInteger({ min: 0 }).transform(
+  (value) => value ?? null,
+);
+
+export const planFormSchema = z.object({
+  code: requiredPattern(
+    /^[A-Za-z0-9_]{2,40}$/,
+    "Use 2–40 letters, digits or underscores",
+  ),
+  name: requiredText(80),
+  description: optionalText(500),
+  monthlyPrice: requiredMoney(),
+  annualPrice: requiredMoney(),
+  currency: requiredPattern(/^[A-Za-z]{3}$/, "Use a 3-letter code"),
+  maxBuildings: limitField,
+  maxSpaces: limitField,
+  maxStaff: limitField,
+  features: z
+    .string()
+    .superRefine((value, ctx) => {
+      const lines = featureLines(value);
+      if (lines.length > 20)
+        ctx.addIssue({ code: "custom", message: "Use at most 20 features" });
+      else if (lines.some((line) => line.length > 120))
+        ctx.addIssue({
+          code: "custom",
+          message: "Each feature must be at most 120 characters",
+        });
+    })
+    .transform(featureLines),
+  trialDays: requiredInteger({ min: 0, max: 90 }),
+  publiclyListed: z.boolean(),
+  active: z.boolean(),
+  sortOrder: requiredInteger(),
+});
+
+export const subscriptionFormSchema = z
+  .object({
+    planId: requiredChoice("Select a plan"),
+    status: enumChoice(subscriptionStatuses),
+    cycle: enumChoice(billingCycles),
+    trialEndsOn: optionalDate(),
+    periodEnd: optionalDate(),
+  })
+  .superRefine((subscription, ctx) => {
+    if (subscription.status === "TRIALING" && !subscription.trialEndsOn)
+      ctx.addIssue({
+        code: "custom",
+        path: ["trialEndsOn"],
+        message: "A trial end date is required",
+      });
+  });
+
+export const invoiceFormSchema = z
+  .object({
+    organizationId: requiredChoice("Select an organization"),
+    fromPlan: z.boolean(),
+    description: optionalText(300),
+    amount: optionalMoney(),
+    tax: optionalMoney(),
+    notes: optionalText(1000),
+  })
+  .superRefine((invoice, ctx) => {
+    if (invoice.fromPlan) return;
+    if (!invoice.description)
+      ctx.addIssue({
+        code: "custom",
+        path: ["description"],
+        message: "A description is required",
+      });
+    if (invoice.amount === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "An amount is required",
+      });
+  });
 
 const optionalLimit = z
   .union([z.number().int().min(0), z.nan(), z.null()])

@@ -80,8 +80,8 @@ describe("memberProfileSchema", () => {
     expect(
       memberProfileSchema.safeParse({ displayName: "n".repeat(121) }).success,
     ).toBe(false);
-    expect(memberProfileSchema.parse({ displayName: " Sam " }).displayName).toBe(
-      "Sam",
-    );
+    expect(
+      memberProfileSchema.parse({ displayName: " Sam " }).displayName,
+    ).toBe("Sam");
   });
 });
