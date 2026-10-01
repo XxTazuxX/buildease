@@ -1,4 +1,4 @@
-import { api } from "@/shared/api/client";
+import { api, fetchAllPages } from "@/shared/api/client";
 export const roles = [
   "PROPERTY_MANAGER",
   "ACCOUNTANT",
@@ -82,6 +82,10 @@ export const adminApi = {
   access: (org: string) => api<Access>(`/organizations/${org}/access`),
   buildings: (org: string, page: number) =>
     api<Building[]>(`/organizations/${org}/buildings?page=${page}`),
+  // Late-bound through `this` so a copied/stubbed adminApi pages through its own buildings().
+  allBuildings(org: string) {
+    return fetchAllPages((page) => this.buildings(org, page));
+  },
   createBuilding: (org: string, body: unknown) =>
     api(`/organizations/${org}/buildings`, "POST", body),
   members: (org: string, building: string, page: number) =>
@@ -130,6 +134,8 @@ export const adminApi = {
         (organizationId ? `&organizationId=${organizationId}` : "") +
         (actorId ? `&actorId=${actorId}` : ""),
     ),
+  orgAudit: (org: string, page: number) =>
+    api<AuditEntry[]>(`/organizations/${org}/audit?page=${page}`),
   impersonate: (id: string) =>
     api<ImpersonationTokens>(`/platform/accounts/${id}/impersonate`, "POST"),
 };

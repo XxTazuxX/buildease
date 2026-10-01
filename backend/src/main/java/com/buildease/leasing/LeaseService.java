@@ -213,6 +213,15 @@ public class LeaseService {
     manager(actor, organization, building);
     var row = lockedLease(organization, building, lease);
     requireLeaseStatus(row, LeaseStatus.DRAFT);
+    long signatures =
+        ((Number)
+                db.one("select count(*) as total from lease_signatures where lease_id=?", lease)
+                    .get("total"))
+            .longValue();
+    // Paper leases (no e-signatures) may be activated directly; once e-signing has started,
+    // both parties must have signed before the lease can take effect.
+    if (signatures == 1)
+      throw new ApiException(409, "Both parties must sign before the lease can be activated");
     UUID resident = Store.id(row, "resident_id");
     UUID space = Store.id(row, "space_id");
     LocalDate startsOn = ((java.sql.Date) row.get("starts_on")).toLocalDate();
@@ -263,10 +272,6 @@ public class LeaseService {
     LocalDate startsOn = ((java.sql.Date) row.get("starts_on")).toLocalDate();
     if (endsOn.isBefore(startsOn))
       throw new ApiException(400, "End date cannot be before start date");
-    UUID assignment = (UUID) row.get("assignment_id");
-    var assignmentRow = db.find("select status from space_assignments where id=?", assignment);
-    if (assignmentRow.isPresent() && "ACTIVE".equals(assignmentRow.get().get("status")))
-      occupancy.end(actor, organization, building, assignment, endsOn);
     int changed =
         db.update(
             "update leases set status='ENDED',ended_on=?,end_reason=?,version=version+1,updated_at=now() where id=? and version=?",
@@ -275,6 +280,10 @@ public class LeaseService {
             lease,
             row.get("version"));
     if (changed != 1) throw new ApiException(409, "Lease changed concurrently");
+    UUID assignment = (UUID) row.get("assignment_id");
+    var assignmentRow = db.find("select status from space_assignments where id=?", assignment);
+    if (assignmentRow.isPresent() && "ACTIVE".equals(assignmentRow.get().get("status")))
+      occupancy.end(actor, organization, building, assignment, endsOn);
     db.audit(actor.id(), organization, "LEASE_ENDED", lease);
   }
 
@@ -389,6 +398,10 @@ public class LeaseService {
     financeWriter(actor, organization, building);
     var row = lockedDeposit(organization, building, lease);
     requireDepositStatus(row, DepositStatus.HELD);
+    if (refundedAmount == null || refundedAmount.signum() <= 0)
+      throw new ApiException(400, "Refund amount must be positive");
+    if (refundedAmount.compareTo((BigDecimal) row.get("amount")) > 0)
+      throw new ApiException(400, "Refund cannot exceed the held deposit");
     db.update(
         "update deposits set status='REFUNDED',refunded_on=?,refunded_amount=?,notes=?,updated_at=now() where id=?",
         refundedOn,
@@ -429,13 +442,13 @@ public class LeaseService {
   private void requireLeaseStatus(Map<String, Object> row, LeaseStatus expected) {
     LeaseStatus current = LeaseStatus.valueOf((String) row.get("status"));
     if (current != expected)
-      throw new ApiException(409, "Cannot change lease from " + current + " to " + expected);
+      throw new ApiException(409, "Lease is " + current + "; this action requires " + expected);
   }
 
   private void requireDepositStatus(Map<String, Object> row, DepositStatus expected) {
     DepositStatus current = DepositStatus.valueOf((String) row.get("status"));
     if (current != expected)
-      throw new ApiException(409, "Cannot change deposit from " + current + " to " + expected);
+      throw new ApiException(409, "Deposit is " + current + "; this action requires " + expected);
   }
 
   private String trim(String value) {

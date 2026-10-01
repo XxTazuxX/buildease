@@ -31,6 +31,7 @@ import {
   StatusChip,
 } from "@/shared/components/Surface";
 import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
+import { PlatformBillingPanel } from "@/modules/billing";
 import { SettingsPanel } from "./SettingsPanel";
 import { AuditLogPanel } from "./AuditLogPanel";
 
@@ -39,7 +40,7 @@ type MoreTarget =
   | { kind: "account"; item: Account }
   | null;
 
-type Tab = "organizations" | "accounts" | "settings" | "audit";
+type Tab = "organizations" | "accounts" | "billing" | "settings" | "audit";
 
 export function PlatformPage() {
   const [tab, setTab] = useState<Tab>("organizations");
@@ -112,10 +113,12 @@ export function PlatformPage() {
         >
           <Tab value="organizations" label="Organizations" />
           <Tab value="accounts" label="Accounts" />
+          <Tab value="billing" label="Billing" />
           <Tab value="settings" label="Settings" />
           <Tab value="audit" label="Audit log" />
         </Tabs>
       </Paper>
+      {tab === "billing" && <PlatformBillingPanel />}
       {tab === "settings" && <SettingsPanel />}
       {tab === "audit" && <AuditLogPanel />}
       {isListTab && (

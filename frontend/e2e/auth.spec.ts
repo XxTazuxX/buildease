@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 const temporary = "Temporary password for tests!";
 const permanent = "Permanent password for tests!";
 async function firstLogin(page: Page, email: string) {
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(temporary);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -113,7 +113,7 @@ test("owner accepts an invitation and switches isolated organizations", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/login");
   await page.screenshot({ path: "../.local/mobile-login.png", fullPage: true });
   await firstLogin(page, "owner@example.test");
   await page.getByRole("button", { name: "Accept invitation" }).click();
@@ -238,7 +238,7 @@ test("tablet navigation and administration use touch-friendly action sheets", as
   page,
 }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill("admin@example.test");
   await page.getByLabel("Password", { exact: true }).fill(permanent);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

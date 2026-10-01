@@ -2,7 +2,11 @@ package com.buildease.e2e;
 
 import com.buildease.BuildEaseApplication;
 import com.buildease.auth.Actor;
+import com.buildease.building.BuildingService;
+import com.buildease.building.SpaceType;
 import com.buildease.common.Store;
+import com.buildease.maintenance.MaintenanceService;
+import com.buildease.occupancy.OccupancyService;
 import com.buildease.security.Role;
 import com.buildease.tenancy.TenantService;
 import java.util.*;
@@ -90,6 +94,51 @@ public class E2eServer {
                     actor, "South Properties", "owner@example.test", "North Owner", null)
                 .get("id");
     tenants.createBuilding(actor, other, "South House", "SOUTH");
+
+    // Billing workflow: a separate managed customer so specs do not depend on each other.
+    tenants.createOrganization(
+        actor, "Harbor Holdings", "billing-owner@example.test", "Harbor Owner", password);
+
+    // Maintenance workflow: a resident with a unit and a property manager to work the ticket.
+    var buildings = context.getBean(BuildingService.class);
+    var occupancy = context.getBean(OccupancyService.class);
+    var maintenance = context.getBean(MaintenanceService.class);
+    UUID quayOrg =
+        (UUID)
+            tenants
+                .createOrganization(
+                    actor, "Quay Residences", "quay-owner@example.test", "Quay Owner", password)
+                .get("id");
+    UUID quay = (UUID) tenants.createBuilding(actor, quayOrg, "Quay House", "QUAY").get("id");
+    UUID flat =
+        buildings.createSpace(
+            actor, quayOrg, quay, null, null, "Flat 1", "F1", SpaceType.FLAT, true, null, 2, null);
+    tenants.invite(
+        actor,
+        quayOrg,
+        "quay-manager@example.test",
+        "Quay Manager",
+        password,
+        false,
+        quay,
+        Set.of(Role.PROPERTY_MANAGER));
+    UUID residentAccount =
+        (UUID)
+            tenants
+                .invite(
+                    actor,
+                    quayOrg,
+                    "quay-tenant@example.test",
+                    "Quay Tenant",
+                    password,
+                    false,
+                    quay,
+                    Set.of(Role.TENANT))
+                .get("id");
+    UUID resident =
+        occupancy.createResident(actor, quayOrg, quay, residentAccount, "Quay Tenant", null);
+    occupancy.assign(actor, quayOrg, quay, resident, flat, java.time.LocalDate.now());
+    maintenance.createCategory(actor, quayOrg, quay, "Plumbing", 4, 48);
     System.out.println("E2E fixtures ready");
     Runtime.getRuntime()
         .addShutdownHook(

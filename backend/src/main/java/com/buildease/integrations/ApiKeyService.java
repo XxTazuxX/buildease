@@ -75,6 +75,16 @@ public class ApiKeyService {
                 "select organization_id,created_by from api_keys where key_hash=? and revoked_at is null",
                 hash)
             .orElseThrow(() -> new ApiException(401, "Invalid API key"));
+    // A key acts with its creator's authority, so it stops working as soon as the creator is no
+    // longer an active owner of the organization (or the organization is disabled).
+    UUID creator = Store.id(row, "created_by");
+    UUID organization = Store.id(row, "organization_id");
+    db.context(creator, null);
+    if (db.find(
+            "select 1 from memberships where organization_id=? and account_id=? and status='ACTIVE' and owner",
+            organization,
+            creator)
+        .isEmpty()) throw new ApiException(401, "Invalid API key");
     db.update("update api_keys set last_used_at=now() where key_hash=?", hash);
     return new ResolvedKey(Store.id(row, "organization_id"), Store.id(row, "created_by"));
   }

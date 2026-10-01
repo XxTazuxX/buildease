@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { api } from "@/shared/api/client";
+import { api, fetchAllPages } from "@/shared/api/client";
 
 export const assetCategories = [
   "HVAC",
@@ -63,19 +63,24 @@ export type NewAsset = z.infer<typeof assetSchema>;
 
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/assets`;
+const assetBody = (body: NewAsset) => ({
+  ...body,
+  spaceId: body.spaceId || undefined,
+  installDate: body.installDate || undefined,
+  warrantyExpiresOn: body.warrantyExpiresOn || undefined,
+});
 
 export const assetsApi = {
   list: (org: string, building: string, status?: AssetStatus) =>
-    api<AssetSummary[]>(
-      `${base(org, building)}${status ? `?status=${status}` : ""}`,
+    fetchAllPages((page) =>
+      api<AssetSummary[]>(
+        `${base(org, building)}?page=${page}${status ? `&status=${status}` : ""}`,
+      ),
     ),
   create: (org: string, building: string, body: NewAsset) =>
-    api<{ id: string }>(base(org, building), "POST", {
-      ...body,
-      spaceId: body.spaceId || undefined,
-      installDate: body.installDate || undefined,
-      warrantyExpiresOn: body.warrantyExpiresOn || undefined,
-    }),
+    api<{ id: string }>(base(org, building), "POST", assetBody(body)),
+  update: (org: string, building: string, id: string, body: NewAsset) =>
+    api(`${base(org, building)}/${id}`, "PATCH", assetBody(body)),
   detail: (org: string, building: string, id: string) =>
     api<AssetDetail>(`${base(org, building)}/${id}`),
   setStatus: (org: string, building: string, id: string, status: AssetStatus) =>

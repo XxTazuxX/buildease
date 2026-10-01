@@ -116,6 +116,14 @@ public class ReportingService {
     result.put("totalCharged", charged);
     result.put("totalCollected", collected);
     result.put("outstandingBalance", chargedToDate.subtract(collectedToDate));
+    // Currency is fixed once a building has leases, so every amount here shares it.
+    result.put(
+        "currency",
+        db.one(
+                "select currency from buildings where organization_id=? and id=?",
+                organization,
+                building)
+            .get("currency"));
     return result;
   }
 
@@ -315,9 +323,21 @@ public class ReportingService {
 
   private String csvField(Object value) {
     String text = value == null ? "" : value.toString();
+    // Neutralize spreadsheet formula injection for text cells (numbers such as -12.50 are safe).
+    if (!text.isEmpty() && "=+-@\t\r".indexOf(text.charAt(0)) >= 0 && !isNumber(text))
+      text = "'" + text;
     if (text.contains(",") || text.contains("\"") || text.contains("\n"))
       return "\"" + text.replace("\"", "\"\"") + "\"";
     return text;
+  }
+
+  private static boolean isNumber(String text) {
+    try {
+      new BigDecimal(text);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
   }
 
   private void requireLeaseAccess(Actor actor, Access access, Map<String, Object> lease) {

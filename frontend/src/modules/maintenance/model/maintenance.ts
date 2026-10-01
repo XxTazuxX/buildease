@@ -101,12 +101,34 @@ export interface Vendor {
   active: boolean;
 }
 export interface MaintenanceRequestDetail extends MaintenanceRequest {
+  description: string;
+  created_by: string;
+  resolution_summary: string | null;
   comments: Comment[];
   history: HistoryEntry[];
   work_orders: WorkOrder[];
   work_logs: WorkLog[];
   photos: Photo[];
 }
+export interface RecurringPlan {
+  id: string;
+  space_id: string;
+  category_id: string;
+  title: string;
+  description: string;
+  interval_days: number;
+  next_run_on: string;
+  active: boolean;
+}
+export const recurringPlanSchema = z.object({
+  spaceId: z.string().uuid(),
+  categoryId: z.string().uuid(),
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().min(1).max(2000),
+  intervalDays: z.number().int().min(1).max(3650),
+  nextRunOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type NewRecurringPlan = z.infer<typeof recurringPlanSchema>;
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/maintenance`;
 export const maintenanceApi = {
@@ -123,8 +145,20 @@ export const maintenanceApi = {
     category: string,
     body: { name: string; responseHours: number; resolutionHours: number },
   ) => api(`${base(org, building)}/categories/${category}`, "PATCH", body),
-  requests: (org: string, building: string) =>
-    api<MaintenanceRequest[]>(`${base(org, building)}/requests`),
+  requests: (org: string, building: string, page = 0) =>
+    api<MaintenanceRequest[]>(`${base(org, building)}/requests?page=${page}`),
+  cancel: (org: string, building: string, request: string, reason: string) =>
+    api(`${base(org, building)}/requests/${request}/cancel`, "POST", {
+      reason,
+    }),
+  recurringPlans: (org: string, building: string) =>
+    api<RecurringPlan[]>(`${base(org, building)}/recurring-plans`),
+  createRecurringPlan: (
+    org: string,
+    building: string,
+    body: NewRecurringPlan,
+  ) =>
+    api<{ id: string }>(`${base(org, building)}/recurring-plans`, "POST", body),
   detail: (org: string, building: string, request: string) =>
     api<MaintenanceRequestDetail>(`${base(org, building)}/requests/${request}`),
   submit: (org: string, building: string, body: NewMaintenanceRequest) =>
@@ -231,7 +265,7 @@ export const maintenanceApi = {
     workOrder: string,
     body: { estimatedCost?: number; actualCost?: number },
   ) =>
-    api(`${base(org, building)}/work-orders/${workOrder}/costs`, "PATCH", body),
+    api(`${base(org, building)}/work-orders/${workOrder}/costs`, "POST", body),
 };
 export async function stripPhotoMetadata(file: File) {
   if (

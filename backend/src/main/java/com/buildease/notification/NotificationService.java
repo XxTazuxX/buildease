@@ -30,6 +30,25 @@ public class NotificationService {
         page * 50);
   }
 
+  public Map<String, Object> unreadCount(Actor actor) {
+    db.context(actor.id(), null, actor.impersonatedBy());
+    return Map.of(
+        "unread",
+        ((Number)
+                db.one(
+                        "select count(*) as n from notifications where account_id=? and read_at is null",
+                        actor.id())
+                    .get("n"))
+            .longValue());
+  }
+
+  public void readAll(Actor actor) {
+    db.context(actor.id(), null, actor.impersonatedBy());
+    db.update(
+        "update notifications set read_at=now() where account_id=? and read_at is null",
+        actor.id());
+  }
+
   public void read(Actor actor, UUID notification) {
     db.context(actor.id(), null, actor.impersonatedBy());
     if (db.update(

@@ -59,15 +59,25 @@ public class LeaseSignatureService {
     Access access = enter(actor, organization, building);
     var leaseRow =
         db.one(
-            "select resident_id from leases where organization_id=? and building_id=? and id=?",
+            "select resident_id,status from leases where organization_id=? and building_id=? and id=? for update",
             organization,
             building,
             lease);
     if (role == SignatureRole.OWNER) {
       if (!access.manager()) throw ApiException.forbidden();
-    } else if (!access.manager() && !isSigningResident(actor, access, leaseRow)) {
+    } else if (!isSigningResident(actor, access, leaseRow)) {
+      // Only the resident themself may sign as RESIDENT; managers must not sign on their behalf.
       throw ApiException.forbidden();
     }
+    if (!"DRAFT".equals(leaseRow.get("status")))
+      throw new ApiException(409, "Only draft leases can be signed");
+    long signedRoles =
+        ((Number)
+                db.one("select count(*) as total from lease_signatures where lease_id=?", lease)
+                    .get("total"))
+            .longValue();
+    if (signedRoles >= 2)
+      throw new ApiException(409, "Lease is fully executed and signatures are locked");
     if (method == SignatureMethod.DRAWN && (signatureData == null || signatureData.isBlank()))
       throw new ApiException(400, "A drawn signature requires signature data");
     db.update(

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { api } from "@/shared/api/client";
+import { api, fetchAllPages } from "@/shared/api/client";
 
 export const prospectStatuses = [
   "NEW",
@@ -43,8 +43,10 @@ const base = (org: string, building: string) =>
 
 export const prospectsApi = {
   list: (org: string, building: string, status?: ProspectStatus) =>
-    api<ProspectSummary[]>(
-      `${base(org, building)}${status ? `?status=${status}` : ""}`,
+    fetchAllPages((page) =>
+      api<ProspectSummary[]>(
+        `${base(org, building)}?page=${page}${status ? `&status=${status}` : ""}`,
+      ),
     ),
   create: (org: string, building: string, body: NewProspect) =>
     api<{ id: string }>(base(org, building), "POST", {

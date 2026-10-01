@@ -147,4 +147,29 @@ class ApiKeyIT {
     assertThatThrownBy(() -> keys.list(manager, s.organization()))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
+
+  @Test
+  void keysStopResolvingWhenTheirCreatorIsNoLongerAnOwner() {
+    Setup s = organization();
+    String key = (String) keys.create(s.owner(), s.organization(), "Sync").get("key");
+    String secondEmail = "owner2-" + UUID.randomUUID() + "@example.test";
+    UUID second =
+        (UUID)
+            tenants
+                .invite(
+                    s.owner(),
+                    s.organization(),
+                    secondEmail,
+                    "Second",
+                    password,
+                    true,
+                    null,
+                    java.util.Set.of())
+                .get("id");
+    tenants.membership(admin, s.organization(), s.owner().id(), false, true);
+    assertThat(second).isNotNull();
+
+    assertThatThrownBy(() -> keys.resolve(key))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(401));
+  }
 }

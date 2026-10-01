@@ -31,4 +31,19 @@ public class IdentityMail {
             EmailTemplateKey.PASSWORD_RESET, publicUrl + "/reset-password?token=" + token);
     mail.send(recipient, rendered.subject(), rendered.body());
   }
+
+  /** Sent instead of a verification link when someone registers an email that has an account. */
+  public void accountExists(String recipient) {
+    var rendered =
+        templates.render(EmailTemplateKey.ACCOUNT_EXISTS, publicUrl + "/forgot-password");
+    mail.send(recipient, rendered.subject(), rendered.body());
+  }
+
+  public void saasInvoiceIssued(String recipient, String organization) {
+    var rendered =
+        templates.render(
+            EmailTemplateKey.SAAS_INVOICE_ISSUED,
+            publicUrl + "/organizations/" + organization + "/billing");
+    mail.send(recipient, rendered.subject(), rendered.body());
+  }
 }

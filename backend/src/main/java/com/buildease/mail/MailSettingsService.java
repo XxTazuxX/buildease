@@ -28,7 +28,7 @@ public class MailSettingsService {
   public Map<String, Object> current(Actor a) {
     platform(a);
     return db.one(
-        "select host,port,username,from_address,starttls from mail_settings where id=true");
+        "select host,port,username,from_address,starttls,smtp_password is not null as password_set from mail_settings where id=true");
   }
 
   public void update(
@@ -70,6 +70,9 @@ public class MailSettingsService {
         "This is a test email confirming your SMTP settings are working.");
   }
 
+  // A delivery failure must not doom a caller's transaction that chooses to tolerate it (e.g.
+  // invoice notifications); callers that should fail still see the exception and roll back.
+  @Transactional(noRollbackFor = ApiException.class)
   public void send(String recipient, String subject, String body) {
     var settings = db.one("select * from mail_settings where id=true");
     String host = (String) settings.get("host");

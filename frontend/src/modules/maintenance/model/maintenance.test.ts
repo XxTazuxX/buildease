@@ -53,3 +53,52 @@ describe("stripPhotoMetadata", () => {
     );
   });
 });
+
+describe("maintenanceApi endpoints", () => {
+  it("saves work-order costs with POST, matching the backend mapping", async () => {
+    const calls: { url: string; method: string }[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = String(input);
+      calls.push({ url, method: init?.method ?? "GET" });
+      if (url.endsWith("/auth/csrf"))
+        return new Response(JSON.stringify({ token: "t" }));
+      return new Response("");
+    }) as typeof fetch;
+    try {
+      const { maintenanceApi } = await import("./maintenance");
+      await maintenanceApi.updateWorkCosts("o", "b", "w", { actualCost: 10 });
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(calls.at(-1)).toEqual({
+      url: "/api/organizations/o/buildings/b/maintenance/work-orders/w/costs",
+      method: "POST",
+    });
+  });
+});
+
+describe("recurringPlanSchema", () => {
+  it("requires a positive interval and an ISO date", async () => {
+    const { recurringPlanSchema } = await import("./maintenance");
+    const plan = {
+      spaceId: "11111111-1111-1111-1111-111111111111",
+      categoryId: "22222222-2222-2222-2222-222222222222",
+      title: "Boiler service",
+      description: "Annual service",
+      intervalDays: 365,
+      nextRunOn: "2026-01-31",
+    };
+    expect(recurringPlanSchema.safeParse(plan).success).toBe(true);
+    expect(
+      recurringPlanSchema.safeParse({ ...plan, intervalDays: 0 }).success,
+    ).toBe(false);
+    expect(
+      recurringPlanSchema.safeParse({ ...plan, nextRunOn: "31/01/2026" })
+        .success,
+    ).toBe(false);
+  });
+});

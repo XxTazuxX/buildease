@@ -45,7 +45,32 @@ export function AssetsPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyAsset);
   const [viewing, setViewing] = useState<string | null>(null);
-  const error = vm.error || vm.list.error?.message;
+  const [editing, setEditing] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const startEdit = async (id: string) => {
+    setLoadError("");
+    try {
+      const detail = await vm.loadDetail(id);
+      setForm({
+        spaceId: detail.space_id ?? "",
+        name: detail.name,
+        category: detail.category,
+        manufacturer: detail.manufacturer ?? "",
+        model: detail.model ?? "",
+        serialNumber: detail.serial_number ?? "",
+        installDate: detail.install_date ?? "",
+        warrantyExpiresOn: detail.warranty_expires_on ?? "",
+        notes: detail.notes ?? "",
+      });
+      setEditing(id);
+      setCreateOpen(true);
+    } catch (cause) {
+      setLoadError(
+        cause instanceof Error ? cause.message : "Could not load asset",
+      );
+    }
+  };
+  const error = vm.error || loadError || vm.list.error?.message;
 
   const spaceName = (id: string | null) =>
     id
@@ -75,6 +100,7 @@ export function AssetsPanel({
           variant="contained"
           onClick={() => {
             setForm(emptyAsset);
+            setEditing(null);
             setCreateOpen(true);
           }}
         >
@@ -108,6 +134,7 @@ export function AssetsPanel({
                 label={item.status}
               />
               <Button onClick={() => setViewing(item.id)}>View</Button>
+              <Button onClick={() => void startEdit(item.id)}>Edit</Button>
               {item.status === "ACTIVE" ? (
                 <Button
                   color="warning"
@@ -140,7 +167,7 @@ export function AssetsPanel({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add asset</DialogTitle>
+        <DialogTitle>{editing ? "Edit asset" : "Add asset"}</DialogTitle>
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -224,10 +251,12 @@ export function AssetsPanel({
               variant="contained"
               disabled={vm.busy || !form.name.trim()}
               onClick={() =>
-                void vm.create(form).then((ok) => ok && setCreateOpen(false))
+                void (
+                  editing ? vm.update(editing, form) : vm.create(form)
+                ).then((ok) => ok && setCreateOpen(false))
               }
             >
-              Add asset
+              {editing ? "Save changes" : "Add asset"}
             </Button>
           </Stack>
         </DialogContent>

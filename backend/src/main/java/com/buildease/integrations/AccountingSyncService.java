@@ -47,6 +47,10 @@ public class AccountingSyncService {
 
   public List<Map<String, Object>> ledger(
       UUID organization, UUID actingAccount, LocalDate from, LocalDate to) {
+    if (from == null || to == null || to.isBefore(from))
+      throw new ApiException(400, "A valid from/to date range is required");
+    if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 366)
+      throw new ApiException(400, "Ledger range cannot exceed 366 days");
     db.context(actingAccount, organization);
     List<Map<String, Object>> lines = new ArrayList<>();
     db.rows(

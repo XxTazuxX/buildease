@@ -223,4 +223,97 @@ class MaintenanceIT {
                     false))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void onlyAssignedWorkersProgressTicketsAndOnlyRequesterConfirms() {
+    String ownerEmail = "owner-" + UUID.randomUUID() + "@example.test";
+    UUID org =
+        (UUID)
+            tenants.createOrganization(admin, "Guarded", ownerEmail, "Owner", password).get("id");
+    Actor owner = actor(ownerEmail);
+    UUID building = (UUID) tenants.createBuilding(owner, org, "Quay", "QUAY").get("id");
+    UUID space =
+        buildings.createSpace(
+            owner, org, building, null, null, "Flat 1", "F1", SpaceType.FLAT, true, null, 4, null);
+    String residentEmail = "resident-" + UUID.randomUUID() + "@example.test";
+    UUID residentAccount =
+        (UUID)
+            tenants
+                .invite(
+                    owner,
+                    org,
+                    residentEmail,
+                    "Resident",
+                    password,
+                    false,
+                    building,
+                    Set.of(Role.TENANT))
+                .get("id");
+    String staffEmail = "staff-" + UUID.randomUUID() + "@example.test";
+    UUID staffAccount =
+        (UUID)
+            tenants
+                .invite(
+                    owner,
+                    org,
+                    staffEmail,
+                    "Staff",
+                    password,
+                    false,
+                    building,
+                    Set.of(Role.MAINTENANCE_STAFF))
+                .get("id");
+    UUID resident =
+        occupancy.createResident(owner, org, building, residentAccount, "Resident", null);
+    occupancy.assign(owner, org, building, resident, space, java.time.LocalDate.now());
+    Actor tenant = actor(residentEmail);
+    Actor staff = actor(staffEmail);
+    UUID category = maintenance.createCategory(owner, org, building, "Electrical", 2, 24);
+
+    UUID cancelled =
+        maintenance.submit(
+            tenant, org, building, space, category, "Bulb", "Out", Impact.LOW, false);
+    maintenance.cancel(tenant, org, building, cancelled, "Fixed it myself");
+    assertThat(maintenance.request(tenant, org, building, cancelled))
+        .containsEntry("status", "CANCELLED");
+
+    UUID request =
+        maintenance.submit(
+            tenant, org, building, space, category, "Socket", "Sparks", Impact.HIGH, false);
+    maintenance.triage(owner, org, building, request, Priority.HIGH, null);
+    assertThatThrownBy(
+            () -> maintenance.assignStaff(owner, org, building, request, residentAccount, null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(400));
+    UUID work = maintenance.assignStaff(owner, org, building, request, staffAccount, null);
+    assertThatThrownBy(() -> maintenance.start(tenant, org, building, request))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    maintenance.start(staff, org, building, request);
+    assertThatThrownBy(() -> maintenance.cancel(tenant, org, building, request, "Changed mind"))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    assertThatThrownBy(() -> maintenance.resolve(tenant, org, building, request, "Done"))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    maintenance.addComment(staff, org, building, request, "Needs a new breaker", true);
+    assertThat((List<?>) maintenance.request(staff, org, building, request).get("comments"))
+        .hasSize(1);
+    assertThat((List<?>) maintenance.request(tenant, org, building, request).get("comments"))
+        .isEmpty();
+    maintenance.resolve(staff, org, building, request, "Breaker replaced");
+    assertThatThrownBy(
+            () -> maintenance.close(staff, org, building, request, ResolutionOutcome.CONFIRMED))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+
+    maintenance.close(tenant, org, building, request, ResolutionOutcome.REJECTED);
+    var reopened = maintenance.request(owner, org, building, request);
+    assertThat(reopened).containsEntry("status", "IN_PROGRESS");
+    assertThat(reopened.get("resolved_at")).isNull();
+    assertThat((List<Map<String, Object>>) reopened.get("work_orders"))
+        .anySatisfy(
+            row ->
+                assertThat(row).containsEntry("id", work).containsEntry("status", "IN_PROGRESS"));
+    maintenance.resolve(staff, org, building, request, "Wiring redone");
+    maintenance.close(tenant, org, building, request, ResolutionOutcome.CONFIRMED);
+    assertThat(maintenance.request(tenant, org, building, request))
+        .containsEntry("status", "CLOSED");
+  }
 }

@@ -136,21 +136,31 @@ function AuthShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function LoginPage() {
+const modeByPath: Record<string, OnboardingMode> = {
+  "/verify": "verify",
+  "/reset-password": "reset",
+  "/register": "register",
+  "/forgot-password": "forgot",
+};
+
+export function LoginPage({
+  initialMode,
+}: {
+  initialMode?: OnboardingMode | null;
+} = {}) {
   const { form, error, submit } = useLoginViewModel();
-  const initialMode = window.location.pathname.endsWith("/verify")
-    ? "verify"
-    : window.location.pathname.endsWith("/reset-password")
-      ? "reset"
-      : null;
-  const [mode, setMode] = useState<OnboardingMode | null>(initialMode);
+  const [mode, setMode] = useState<OnboardingMode | null>(
+    initialMode !== undefined
+      ? initialMode
+      : (modeByPath[window.location.pathname] ?? null),
+  );
   if (mode)
     return (
       <AuthShell>
         <OnboardingForm
           mode={mode}
           back={() => {
-            window.history.replaceState({}, "", "/");
+            window.history.replaceState({}, "", "/login");
             setMode(null);
           }}
         />
@@ -220,6 +230,11 @@ export function LoginPage() {
             ·
           </Typography>
           <Button onClick={() => setMode("forgot")}>Forgot password?</Button>
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1, textAlign: "center" }}>
+          <Button component="a" href="/" size="small" color="inherit">
+            ← BuildEase home &amp; pricing
+          </Button>
         </Typography>
       </Box>
     </AuthShell>

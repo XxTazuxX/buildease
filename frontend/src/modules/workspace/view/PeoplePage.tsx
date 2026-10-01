@@ -30,6 +30,7 @@ import { FieldsForm } from "@/shared/components/FieldsForm";
 import { Pager } from "@/shared/components/Pager";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { PageHeader, StatusChip } from "@/shared/components/Surface";
+import { AuditLogPanel } from "@/modules/admin/view/AuditLogPanel";
 
 function RoleDialog({
   org,
@@ -100,10 +101,15 @@ export function PeoplePage({
 }) {
   const auth = useAuth();
   const [params, setParams] = useSearchParams();
-  const tab = ["occupancy", "announcements"].includes(params.get("tab") ?? "")
-    ? (params.get("tab") as "occupancy" | "announcements")
+  const tab = ["occupancy", "announcements", "activity"].includes(
+    params.get("tab") ?? "",
+  )
+    ? (params.get("tab") as "occupancy" | "announcements" | "activity")
     : "members";
-  const [page, setPage] = useState(0);
+  // Member paging restarts whenever the building changes.
+  const [paging, setPaging] = useState({ building, page: 0 });
+  const page = paging.building === building ? paging.page : 0;
+  const setPage = (next: number) => setPaging({ building, page: next });
   const [invite, setInvite] = useState(false);
   const [makeOwner, setMakeOwner] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(["TENANT"]);
@@ -152,6 +158,7 @@ export function PeoplePage({
               <Tab value="members" label="Members" />
               <Tab value="occupancy" label="Occupancy" />
               {canManage && <Tab value="announcements" label="Announcements" />}
+              {owner && <Tab value="activity" label="Activity" />}
             </Tabs>
           </Paper>
           {tab === "occupancy" ? (
@@ -162,6 +169,8 @@ export function PeoplePage({
             />
           ) : tab === "announcements" && canManage ? (
             <AnnouncementsPanel org={org} building={building} />
+          ) : tab === "activity" && owner ? (
+            <AuditLogPanel org={org} />
           ) : (
             <>
               {(vm.members.error || action.error) && (

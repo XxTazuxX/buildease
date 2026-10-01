@@ -48,9 +48,11 @@ Before deployment: run verification, review the next migration, take a Neon bran
 
 A failed startup/migration must block rollout. Check a non-secret startup log, GET `/api/auth/csrf`, and a designated administrator login/profile/logout smoke flow. Do not include tokens, cookies, credential-bearing URLs, or passwords in logs or support reports. Audit events record actor, target, action, organization, and time without credentials.
 
-The maintenance-first release intentionally excludes subscriptions, billing, leases, rent collection, security patrols, utilities, SMS, native mobile apps, and AI-assisted operations. Transactional email is limited to identity and invitation workflows. Web push subscriptions are stored, while production push delivery still requires a VAPID-capable delivery adapter.
+BuildEase runs as a SaaS: self-registered workspaces start a 14-day trial, plans enforce building/unit/staff-seat limits, and the platform operator approves plan requests, issues invoices and records payments from **Administration → Billing** (manual invoicing, no payment processor). Visitors land on the public landing and pricing pages; see the [billing API](docs/api/billing.md).
 
-- [API contracts](docs/api/authentication.md)
+Scope boundaries: tenant screening, online rent payment, listing syndication, accounting export and web push delivery are adapter boundaries with stub implementations until real provider accounts are configured; they never contact an external service. Security patrols, visitor logs, utility billing, SMS and native mobile apps are not implemented. Transactional email covers identity, invitations and subscription invoices. Web push subscriptions are stored and dispatched to the `PushSender` adapter; production delivery needs a VAPID-signing adapter.
+
+- [API contracts](docs/api/authentication.md) · [occupancy](docs/api/occupancy.md) · [maintenance](docs/api/maintenance.md) · [billing](docs/api/billing.md)
 - [Security boundaries and role model](docs/architecture/authentication.md)
 - [Dependency evidence](docs/decisions/ADR-001-auth-foundation.md)
 - [Instruction router](AGENTS.md)

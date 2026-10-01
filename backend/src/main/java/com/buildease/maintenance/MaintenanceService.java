@@ -234,7 +234,7 @@ public class MaintenanceService {
         db.rows(
             "select id,actor_id,body,internal,created_at from maintenance_comments where request_id=? and (? or not internal) order by created_at,id",
             request,
-            access.manager()));
+            access.manager() || isAssignee(actor, organization, building, request)));
     result.put(
         "photos",
         db.rows(
@@ -282,10 +282,13 @@ public class MaintenanceService {
       UUID account,
       BigDecimal estimate) {
     manager(actor, organization, building);
-    db.one(
-        "select 1 from memberships where organization_id=? and account_id=? and status='ACTIVE'",
-        organization,
-        account);
+    if (db.find(
+            "select 1 from memberships m where m.organization_id=? and m.account_id=? and m.status='ACTIVE' and (m.owner or exists(select 1 from building_roles r where r.organization_id=m.organization_id and r.building_id=? and r.account_id=m.account_id and r.role in ('MAINTENANCE_STAFF','PROPERTY_MANAGER')))",
+            organization,
+            account,
+            building)
+        .isEmpty())
+      throw new ApiException(400, "Assignee must be maintenance staff in this building");
     return assign(actor, organization, building, request, account, null, estimate);
   }
 
@@ -362,7 +365,7 @@ public class MaintenanceService {
   public void start(Actor actor, UUID organization, UUID building, UUID request) {
     Access access = enter(actor, organization, building);
     var row = lockedRequest(organization, building, request, true);
-    requireRequestAccess(actor, organization, building, row, access);
+    requireWorker(actor, organization, building, request, access);
     requireStatus(row, RequestStatus.ASSIGNED);
     db.update(
         "update work_orders set status='IN_PROGRESS',updated_at=now() where request_id=? and status='ASSIGNED' and (? or assigned_account_id=? or vendor_id in (select vendor_id from vendor_accounts where account_id=? and organization_id=? and building_id=?))",
@@ -379,11 +382,18 @@ public class MaintenanceService {
   public void resolve(Actor actor, UUID organization, UUID building, UUID request, String summary) {
     Access access = enter(actor, organization, building);
     var row = lockedRequest(organization, building, request, true);
-    requireRequestAccess(actor, organization, building, row, access);
+    requireWorker(actor, organization, building, request, access);
     requireStatus(row, RequestStatus.IN_PROGRESS);
+    if (summary == null || summary.isBlank())
+      throw new ApiException(400, "Resolution summary is required");
     db.update(
-        "update work_orders set status='COMPLETED',updated_at=now() where request_id=? and status='IN_PROGRESS'",
-        request);
+        "update work_orders set status='COMPLETED',updated_at=now() where request_id=? and status in ('ASSIGNED','IN_PROGRESS') and (? or assigned_account_id=? or vendor_id in (select vendor_id from vendor_accounts where account_id=? and organization_id=? and building_id=?))",
+        request,
+        access.manager(),
+        actor.id(),
+        actor.id(),
+        organization,
+        building);
     transition(
         actor,
         organization,
@@ -413,10 +423,11 @@ public class MaintenanceService {
       Actor actor, UUID organization, UUID building, UUID request, ResolutionOutcome outcome) {
     Access access = enter(actor, organization, building);
     var row = lockedRequest(organization, building, request, true);
-    requireRequestAccess(actor, organization, building, row, access);
     requireStatus(row, RequestStatus.RESOLVED);
-    if (!access.manager() && outcome == ResolutionOutcome.AUTO_CLOSED)
-      throw ApiException.forbidden();
+    if (!access.manager()) {
+      if (outcome == ResolutionOutcome.AUTO_CLOSED || !isRequester(actor, row))
+        throw ApiException.forbidden();
+    }
     if (outcome == ResolutionOutcome.REJECTED) {
       transition(
           actor,
@@ -425,8 +436,11 @@ public class MaintenanceService {
           row,
           RequestStatus.IN_PROGRESS,
           "Resident requested more work",
-          "resolution_outcome=?",
+          "resolution_outcome=?,resolution_summary=null,resolved_at=null",
           outcome.name());
+      db.update(
+          "update work_orders set status='IN_PROGRESS',updated_at=now() where id=(select id from work_orders where request_id=? and status='COMPLETED' order by updated_at desc,id limit 1)",
+          request);
       return;
     }
     transition(
@@ -443,10 +457,14 @@ public class MaintenanceService {
   public void cancel(Actor actor, UUID organization, UUID building, UUID request, String reason) {
     Access access = enter(actor, organization, building);
     var row = lockedRequest(organization, building, request, true);
-    requireRequestAccess(actor, organization, building, row, access);
     RequestStatus current = RequestStatus.valueOf((String) row.get("status"));
     if (Set.of(RequestStatus.CLOSED, RequestStatus.CANCELLED).contains(current))
       throw conflict(current, RequestStatus.CANCELLED);
+    if (!access.manager()) {
+      if (!isRequester(actor, row)) throw ApiException.forbidden();
+      if (!Set.of(RequestStatus.SUBMITTED, RequestStatus.TRIAGED).contains(current))
+        throw new ApiException(409, "Only managers can cancel a request once work is assigned");
+    }
     transition(
         actor, organization, building, row, RequestStatus.CANCELLED, reason, "", new Object[0]);
     db.update(
@@ -647,6 +665,33 @@ public class MaintenanceService {
             building)
         .isPresent()) return;
     throw ApiException.forbidden();
+  }
+
+  private boolean isAssignee(Actor actor, UUID organization, UUID building, UUID request) {
+    return db.find(
+            "select 1 from work_orders w where w.request_id=? and w.status<>'CANCELLED' and (w.assigned_account_id=? or w.vendor_id in (select vendor_id from vendor_accounts where account_id=? and organization_id=? and building_id=?))",
+            request,
+            actor.id(),
+            actor.id(),
+            organization,
+            building)
+        .isPresent();
+  }
+
+  private void requireWorker(
+      Actor actor, UUID organization, UUID building, UUID request, Access access) {
+    if (access.manager() || isAssignee(actor, organization, building, request)) return;
+    throw ApiException.forbidden();
+  }
+
+  private boolean isRequester(Actor actor, Map<String, Object> request) {
+    if (actor.id().equals(request.get("created_by"))) return true;
+    return request.get("resident_id") != null
+        && db.find(
+                "select 1 from residents where id=? and account_id=?",
+                request.get("resident_id"),
+                actor.id())
+            .isPresent();
   }
 
   private Map<String, Object> lockedRequest(

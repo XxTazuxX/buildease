@@ -30,6 +30,16 @@ public class NotificationController {
     return service.inbox(actor, unreadOnly, page);
   }
 
+  @GetMapping("/unread-count")
+  Object unreadCount(@RequestAttribute Actor actor) {
+    return service.unreadCount(actor);
+  }
+
+  @PostMapping("/read-all")
+  void readAll(@RequestAttribute Actor actor) {
+    service.readAll(actor);
+  }
+
   @PostMapping("/{notification}/read")
   void read(@RequestAttribute Actor actor, @PathVariable UUID notification) {
     service.read(actor, notification);

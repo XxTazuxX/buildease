@@ -53,7 +53,7 @@ export function useWorkspaceContext(org: string) {
   const access = useOrgAccess(org);
   const buildings = useQuery({
     queryKey: [org, "buildings"],
-    queryFn: () => adminApi.buildings(org, 0),
+    queryFn: () => adminApi.allBuildings(org),
     enabled: !!org,
   });
   return { access, buildings };
@@ -65,7 +65,7 @@ export function useWorkspace(org: string, building: string, page: number) {
   });
   const buildings = useQuery({
     queryKey: [org, "buildings"],
-    queryFn: () => adminApi.buildings(org, 0),
+    queryFn: () => adminApi.allBuildings(org),
   });
   const canManage =
     access.data?.owner ||
@@ -118,10 +118,19 @@ export function usePlatformAudit(
   page: number,
   organizationId?: string,
   actorId?: string,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ["platform", "audit", page, organizationId, actorId],
     queryFn: () => adminApi.platformAudit(page, organizationId, actorId),
+    enabled,
+  });
+}
+export function useOrgAudit(org: string, page: number) {
+  return useQuery({
+    queryKey: [org, "audit", page],
+    queryFn: () => adminApi.orgAudit(org, page),
+    enabled: !!org,
   });
 }
 export function useRoleEditor(org: string, building: string, user: string) {

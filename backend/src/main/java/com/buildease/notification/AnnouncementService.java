@@ -96,12 +96,22 @@ public class AnnouncementService {
 
   public Map<String, Object> detail(
       Actor actor, UUID organization, UUID building, UUID announcement) {
-    enter(actor, organization, building);
-    return db.one(
-        "select id,title,body,audience,sent_by,recipient_count,created_at from announcements where organization_id=? and building_id=? and id=?",
-        organization,
-        building,
-        announcement);
+    Access access = enter(actor, organization, building);
+    var row =
+        db.one(
+            "select id,title,body,audience,sent_by,recipient_count,created_at from announcements where organization_id=? and building_id=? and id=?",
+            organization,
+            building,
+            announcement);
+    // Only the announcement's audience (and managers) may read it; recipients are exactly the
+    // accounts that received its inbox notification.
+    if (!access.manager()
+        && db.find(
+                "select 1 from notifications where account_id=? and deduplication_key=?",
+                actor.id(),
+                "announcement:" + announcement)
+            .isEmpty()) throw ApiException.forbidden();
+    return row;
   }
 
   private record Access(boolean owner, boolean manager, Set<String> roles) {}

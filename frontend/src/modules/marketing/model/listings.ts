@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { api } from "@/shared/api/client";
+import { api, fetchAllPages } from "@/shared/api/client";
 
 export const listingChannels = ["ZILLOW", "APARTMENTS_COM"] as const;
 export type ListingChannel = (typeof listingChannels)[number];
@@ -46,8 +46,10 @@ const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/listings`;
 
 export const listingsApi = {
+  page: (org: string, building: string, page: number) =>
+    api<ListingSummary[]>(`${base(org, building)}?page=${page}`),
   list: (org: string, building: string) =>
-    api<ListingSummary[]>(base(org, building)),
+    fetchAllPages((page) => listingsApi.page(org, building, page)),
   create: (org: string, building: string, body: NewListing) =>
     api<{ id: string }>(base(org, building), "POST", body),
   detail: (org: string, building: string, id: string) =>

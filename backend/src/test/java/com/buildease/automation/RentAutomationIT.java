@@ -238,4 +238,78 @@ class RentAutomationIT {
     assertThat(firstCharges).hasSize(1);
     assertThat(secondCharges).hasSize(1);
   }
+
+  private void allowAnotherRun() {
+    transactions.executeWithoutResult(
+        status ->
+            db.update(
+                "update automation_runs set scheduled_for=scheduled_for-interval '1 hour' where job_key='rent'"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private java.util.List<java.util.Map<String, Object>> charges(Fixture f) {
+    return (java.util.List<java.util.Map<String, Object>>)
+        leases.lease(f.owner(), f.organization(), f.building(), f.lease()).get("charges");
+  }
+
+  @Test
+  void eachUnpaidOverduePeriodGetsItsOwnLateFee() {
+    Fixture f = organizationWithActiveLease("G", LocalDate.now().minusDays(45));
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(f.owner().id(), f.organization(), null);
+          db.update(
+              "update buildings set late_fee_amount=?,late_fee_grace_days=? where id=?",
+              new BigDecimal("25.00"),
+              3,
+              f.building());
+        });
+
+    automation.run();
+    allowAnotherRun();
+    automation.run();
+
+    var lateFees = charges(f).stream().filter(c -> "LATE_FEE".equals(c.get("type"))).toList();
+    var rent = charges(f).stream().filter(c -> "RENT".equals(c.get("type"))).toList();
+    assertThat(rent).hasSize(2);
+    assertThat(lateFees).hasSize(2);
+  }
+
+  @Test
+  void monthEndLeasesKeepTheirAnchorDay() {
+    LocalDate jan31 = LocalDate.of(LocalDate.now().getYear() - 1, 1, 31);
+    Fixture f = organizationWithActiveLease("H", jan31);
+
+    automation.run();
+    allowAnotherRun();
+    automation.run();
+    allowAnotherRun();
+    automation.run();
+
+    var dueDates =
+        charges(f).stream()
+            .filter(c -> "RENT".equals(c.get("type")))
+            .map(c -> ((java.sql.Date) c.get("due_on")).toLocalDate())
+            .toList();
+    assertThat(dueDates)
+        .containsExactly(jan31, jan31.plusMonths(1), LocalDate.of(jan31.getYear(), 3, 31));
+  }
+
+  @Test
+  void leasesPastTheirEndDateAreEndedAndFreeTheSpace() {
+    LocalDate startsOn = LocalDate.now().minusDays(20);
+    Fixture f = organizationWithActiveLease("I", startsOn);
+    transactions.executeWithoutResult(
+        status -> {
+          db.context(f.owner().id(), f.organization(), null);
+          db.update("update leases set ends_on=current_date-1 where id=?", f.lease());
+        });
+
+    automation.run();
+
+    var detail = leases.lease(f.owner(), f.organization(), f.building(), f.lease());
+    assertThat(detail).containsEntry("status", "ENDED").containsEntry("end_reason", "EXPIRED");
+    assertThat(buildings.spaces(f.owner(), f.organization(), f.building()).getFirst().get("status"))
+        .isEqualTo("VACANT");
+  }
 }

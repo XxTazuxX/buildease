@@ -27,13 +27,14 @@ import {
   useInspectionSpaces,
   useInspections,
 } from "../viewmodel/useInspections";
+import { todayIso } from "@/shared/utils/dates";
 
 const emptyInspection = {
   spaceId: "",
   leaseId: "",
   residentId: "",
   type: "MOVE_IN" as InspectionType,
-  scheduledOn: new Date().toISOString().slice(0, 10),
+  scheduledOn: todayIso(),
 };
 
 export function InspectionsPanel({
@@ -310,6 +311,20 @@ function InspectionDetailDialog({
               {detail.detail.data.photos.length} photo
               {detail.detail.data.photos.length === 1 ? "" : "s"} attached
             </Typography>
+            {detail.detail.data.photos.length > 0 && (
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                {detail.detail.data.photos.map((photo, index) => (
+                  <Button
+                    key={photo.id}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void detail.openPhoto(photo.id)}
+                  >
+                    View photo {index + 1}
+                  </Button>
+                ))}
+              </Stack>
+            )}
             {detail.detail.data.status === "DRAFT" && (
               <Button
                 variant="contained"

@@ -95,6 +95,23 @@ public class ListingService {
     ListingStatus current = ListingStatus.valueOf((String) row.get("status"));
     if (current == ListingStatus.PUBLISHED)
       throw new ApiException(409, "Listing is already published");
+    var space =
+        db.one(
+            "select status from spaces where organization_id=? and building_id=? and id=?",
+            organization,
+            building,
+            row.get("space_id"));
+    if (!Set.of("VACANT", "RESERVED").contains(space.get("status")))
+      throw new ApiException(409, "Only vacant or reserved spaces can be listed");
+    // Claim the published slot in the database before contacting external channels, so a
+    // uniqueness conflict never leaves listings live on a syndication partner.
+    try {
+      db.update(
+          "update listings set status='PUBLISHED',published_at=now(),unpublished_at=null,updated_at=now() where id=?",
+          listing);
+    } catch (DataIntegrityViolationException e) {
+      throw new ApiException(409, "This space already has a published listing");
+    }
     for (ListingChannel channel : channels) {
       var result =
           syndication.publish(
@@ -114,13 +131,6 @@ public class ListingService {
           channel.name(),
           result.status().name(),
           result.externalId());
-    }
-    try {
-      db.update(
-          "update listings set status='PUBLISHED',published_at=now(),unpublished_at=null,updated_at=now() where id=?",
-          listing);
-    } catch (DataIntegrityViolationException e) {
-      throw new ApiException(409, "This space already has a published listing");
     }
     db.audit(actor.id(), organization, "LISTING_PUBLISHED", listing);
   }

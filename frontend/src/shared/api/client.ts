@@ -161,18 +161,25 @@ export function publicApi<T>(path: string, method = "GET", body?: unknown) {
   return request<T>(path, method, body, false);
 }
 
-export async function downloadFile(
-  path: string,
-  filename: string,
-): Promise<void> {
+async function fetchBlob(path: string): Promise<Response> {
   const token = impersonationAccessToken ?? accessToken;
   const headers: Record<string, string> = token
     ? { Authorization: `Bearer ${token}` }
     : {};
-  const response = await fetch(`/api${path}`, {
-    headers,
-    credentials: "same-origin",
-  });
+  return fetch(`/api${path}`, { headers, credentials: "same-origin" });
+}
+
+export async function downloadFile(
+  path: string,
+  filename: string,
+): Promise<void> {
+  let response = await fetchBlob(path);
+  if (response.status === 401) {
+    // Same silent-refresh contract as api(): rotate the token once, then retry.
+    if (impersonationAccessToken) await refreshImpersonation();
+    else await refresh();
+    response = await fetchBlob(path);
+  }
   if (!response.ok) {
     const data = (await response
       .json()
@@ -185,7 +192,25 @@ export async function downloadFile(
   link.href = url;
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/** Server lists are paged in fixed pages of this size. */
+export const PAGE_SIZE = 50;
+
+/** Loads every page of a paged list endpoint (for pickers that need the full set). */
+export async function fetchAllPages<T>(
+  load: (page: number) => Promise<T[]>,
+  maxPages = 40,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await load(page);
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return all;
 }
 
 export async function login(email: string, password: string) {

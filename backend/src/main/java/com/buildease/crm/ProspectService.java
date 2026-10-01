@@ -92,6 +92,10 @@ public class ProspectService {
     ProspectStatus current = ProspectStatus.valueOf((String) row.get("status"));
     if (TERMINAL.contains(current))
       throw new ApiException(409, "Cannot change status of a " + current + " prospect");
+    // The funnel only moves forward. Screening is manual until a provider is configured, so a
+    // manager may approve at any open stage, but an approved or screened prospect never goes back.
+    if (!TERMINAL.contains(status) && status != current && status.ordinal() < current.ordinal())
+      throw new ApiException(409, "Cannot move a prospect from " + current + " back to " + status);
     db.update(
         "update prospects set status=?,notes=coalesce(?,notes),updated_at=now() where id=?",
         status.name(),
@@ -106,11 +110,18 @@ public class ProspectService {
     ProspectStatus current = ProspectStatus.valueOf((String) row.get("status"));
     if (current != ProspectStatus.APPROVED)
       throw new ApiException(409, "Only an approved prospect can be linked to a lease");
-    db.one(
-        "select id from leases where organization_id=? and building_id=? and id=?",
-        organization,
-        building,
-        lease);
+    var leaseRow =
+        db.one(
+            "select space_id,status from leases where organization_id=? and building_id=? and id=?",
+            organization,
+            building,
+            lease);
+    if (!Set.of("DRAFT", "ACTIVE").contains(leaseRow.get("status")))
+      throw new ApiException(409, "Only a draft or active lease can be linked");
+    if (row.get("space_id") != null && !row.get("space_id").equals(leaseRow.get("space_id")))
+      throw new ApiException(400, "Lease is for a different space than the prospect");
+    if (db.find("select 1 from prospects where lease_id=? and id<>?", lease, prospect).isPresent())
+      throw new ApiException(409, "Lease is already linked to another prospect");
     db.update(
         "update prospects set status='LEASED',lease_id=?,updated_at=now() where id=?",
         lease,

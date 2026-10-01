@@ -14,6 +14,12 @@ export interface Resident {
   assignment_id: string | null;
   space_id: string | null;
   starts_on: string | null;
+  household?: HouseholdMember[];
+}
+export interface HouseholdMember {
+  id: string;
+  name: string;
+  relationship: string | null;
 }
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}`;
@@ -36,6 +42,17 @@ export const occupancyApi = {
     building: string,
     body: { residentId: string; spaceId: string; startsOn: string },
   ) => api(`${base(org, building)}/space-assignments`, "POST", body),
+  addHouseholdMember: (
+    org: string,
+    building: string,
+    resident: string,
+    body: { name: string; relationship?: string },
+  ) =>
+    api<{ id: string }>(
+      `${base(org, building)}/residents/${resident}/household-members`,
+      "POST",
+      body,
+    ),
   end: (org: string, building: string, assignment: string, endsOn: string) =>
     api(`${base(org, building)}/space-assignments/${assignment}/end`, "POST", {
       endsOn,

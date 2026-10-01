@@ -128,5 +128,19 @@ export function useInspectionDetail(org: string, building: string, id: string) {
       setBusy(false);
     }
   };
-  return { detail, busy, error, addItem, uploadPhoto };
+  const openPhoto = async (photo: string) => {
+    setError("");
+    try {
+      const { url } = await inspectionsApi.downloadPhoto(
+        org,
+        building,
+        id,
+        photo,
+      );
+      window.open(url, "_blank", "noopener");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Photo unavailable");
+    }
+  };
+  return { detail, busy, error, addItem, uploadPhoto, openPhoto };
 }

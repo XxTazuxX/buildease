@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { api } from "@/shared/api/client";
+import { api, fetchAllPages } from "@/shared/api/client";
 
 export const leaseStatuses = ["DRAFT", "ACTIVE", "ENDED", "CANCELLED"] as const;
 export const paymentMethods = [
@@ -78,7 +78,10 @@ export type NewLease = z.infer<typeof leaseSchema>;
 const base = (org: string, building: string) =>
   `/organizations/${org}/buildings/${building}/leases`;
 export const leasesApi = {
-  list: (org: string, building: string) => api<Lease[]>(base(org, building)),
+  page: (org: string, building: string, page: number) =>
+    api<Lease[]>(`${base(org, building)}?page=${page}`),
+  list: (org: string, building: string) =>
+    fetchAllPages((page) => leasesApi.page(org, building, page)),
   detail: (org: string, building: string, lease: string) =>
     api<LeaseDetail>(`${base(org, building)}/${lease}`),
   create: (org: string, building: string, body: NewLease) =>

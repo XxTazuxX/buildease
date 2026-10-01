@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MenuItem, TextField } from "@mui/material";
 import { PageHeader } from "@/shared/components/Surface";
+import { QueryError } from "@/shared/components/QueryError";
 import { adminApi } from "@/modules/admin/model/admin";
 import { MyUnitPanel } from "./MyUnitPanel";
 import { MyLeasePanel } from "./MyLeasePanel";
@@ -10,7 +11,7 @@ import { MyMaintenancePanel } from "./MyMaintenancePanel";
 export function TenantPortalPage({ org }: { org: string }) {
   const buildings = useQuery({
     queryKey: [org, "buildings"],
-    queryFn: () => adminApi.buildings(org, 0),
+    queryFn: () => adminApi.allBuildings(org),
     enabled: !!org,
   });
   const [selected, setSelected] = useState("");
@@ -24,6 +25,7 @@ export function TenantPortalPage({ org }: { org: string }) {
         title="Your lease, unit, and requests"
         description="Everything about your place, in one spot."
       />
+      <QueryError queries={[buildings]} what="your buildings" />
       {buildings.data && buildings.data.length > 1 && (
         <TextField
           select

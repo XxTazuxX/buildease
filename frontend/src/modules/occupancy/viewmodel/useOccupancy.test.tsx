@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
 import { useOccupancy } from "./useOccupancy";
 import { occupancyApi } from "../model/occupancy";
+import { todayIso } from "@/shared/utils/dates";
 
 vi.mock("../model/occupancy", () => ({
   occupancyApi: {
@@ -32,7 +33,7 @@ it("assigns a resident to a space starting today and invalidates the workspace",
   const { result } = renderHook(() => useOccupancy("org", "building"), {
     wrapper,
   });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   let outcome: boolean | undefined;
   await act(async () => {
     outcome = await result.current.assign("resident-1", "space-1");
@@ -53,7 +54,7 @@ it("ends an assignment as of today", async () => {
   const { result } = renderHook(() => useOccupancy("org", "building"), {
     wrapper,
   });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   await act(async () => {
     await result.current.end("assignment-1");
   });

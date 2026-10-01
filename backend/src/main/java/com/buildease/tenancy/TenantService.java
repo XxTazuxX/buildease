@@ -1,6 +1,7 @@
 package com.buildease.tenancy;
 
 import com.buildease.auth.*;
+import com.buildease.billing.SubscriptionService;
 import com.buildease.common.*;
 import com.buildease.security.*;
 import java.math.BigDecimal;
@@ -15,9 +16,25 @@ public class TenantService {
   private final Store db;
   private final PasswordEncoder passwords;
 
-  public TenantService(Store db, PasswordEncoder passwords) {
+  private final SubscriptionService subscriptions;
+
+  public TenantService(Store db, PasswordEncoder passwords, SubscriptionService subscriptions) {
     this.db = db;
     this.passwords = passwords;
+    this.subscriptions = subscriptions;
+  }
+
+  /** Staff (owners and non-tenant roles) consume plan seats; tenants and vendors never do. */
+  private void requireStaffSeat(UUID org, UUID user, boolean makeOwner, Set<Role> roles) {
+    boolean staff = makeOwner || roles.stream().anyMatch(r -> r != Role.TENANT && r != Role.VENDOR);
+    if (!staff) return;
+    if (user != null
+        && db.find(
+                "select 1 from memberships m where m.organization_id=? and m.account_id=? and m.status in ('ACTIVE','PENDING') and (m.owner or exists(select 1 from building_roles r where r.organization_id=m.organization_id and r.account_id=m.account_id and r.role not in ('TENANT','VENDOR')))",
+                org,
+                user)
+            .isPresent()) return;
+    subscriptions.requireCapacity(org, SubscriptionService.Resource.STAFF);
   }
 
   private void platform(Actor a) {
@@ -102,6 +119,7 @@ public class TenantService {
     db.update("insert into organizations(id,name) values (?,?)", org, name);
     db.context(a.id(), org, a.impersonatedBy());
     member(a, org, user, true, existing);
+    subscriptions.provision(org);
     db.audit(a.id(), org, "ORGANIZATION_CREATED", org);
     return Map.of("id", org);
   }
@@ -391,6 +409,7 @@ public class TenantService {
 
   public Map<String, Object> createBuilding(Actor a, UUID org, String name, String code) {
     owner(a, org);
+    subscriptions.requireCapacity(org, SubscriptionService.Resource.BUILDING);
     UUID id = UUID.randomUUID();
     db.update(
         "insert into buildings(id,organization_id,name,code) values (?,?,?,?)",
@@ -439,6 +458,7 @@ public class TenantService {
     boolean existing =
         db.find("select id from accounts where email=?", AuthService.email(email)).isPresent();
     UUID user = account(email, name, password);
+    requireStaffSeat(org, user, makeOwner, roles);
     var current =
         db.find("select * from memberships where organization_id=? and account_id=?", org, user);
     if (current.isPresent() && !current.get().get("status").equals("REMOVED")) {
@@ -489,6 +509,8 @@ public class TenantService {
             "select * from memberships where organization_id=? and account_id=? for update",
             org,
             user);
+    if (makeOwner && !removed && !(boolean) m.get("owner"))
+      requireStaffSeat(org, user, true, Set.of());
     if ((boolean) m.get("owner") && m.get("status").equals("ACTIVE") && (removed || !makeOwner)) {
       long owners =
           ((Number)
@@ -523,6 +545,7 @@ public class TenantService {
 
   public void replaceRoles(Actor a, UUID org, UUID building, UUID user, Set<Role> roles) {
     boolean owner = enter(a, org);
+    requireStaffSeat(org, user, false, roles);
     replaceRolesInternal(a, org, building, user, roles, owner);
   }
 

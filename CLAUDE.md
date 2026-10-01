@@ -43,7 +43,7 @@ First-time Neon setup, migrations, and credential rotation are documented in [RE
 
 ### Backend — layered by feature package
 
-`backend/src/main/java/com/buildease/<domain>` (current domains: `auth`, `automation`, `building`, `common`, `config`, `maintenance`, `notification`, `occupancy`, `onboarding`, `security`, `tenancy`). Dependency direction is strict: **Controller → Service/Application → Repository → PostgreSQL**.
+`backend/src/main/java/com/buildease/<domain>` (current domains: `assets`, `auth`, `automation`, `billing`, `building`, `common`, `config`, `crm`, `impersonation`, `inspection`, `integrations`, `leasing`, `mail`, `maintenance`, `marketing`, `notification`, `occupancy`, `onboarding`, `reporting`, `screening`, `security`, `tenancy`). Dependency direction is strict: **Controller → Service/Application → Repository → PostgreSQL**.
 - Repositories never depend on controllers or hold business rules; persistence entities are not automatically REST DTOs.
 - Significant workflows (state transitions, money, occupancy/maintenance lifecycle) go through services, not controller-driven setters.
 - `common/` is only for genuinely cross-domain concerns (shared API errors, pagination, audit primitives) — keep domain logic in its owning package.
@@ -53,7 +53,7 @@ First-time Neon setup, migrations, and credential rotation are documented in [RE
 
 ### Frontend — modular MVVM
 
-`frontend/src/` is organized as `app/` (router, providers, theme, config), `modules/<domain>/` (current modules: `admin`, `auth`, `buildings`, `maintenance`, `occupancy`, `onboarding`), and `shared/` (cross-module components, hooks, `api/` HTTP infra, utils). Within a module, dependency direction is **View → ViewModel → Model → Shared**:
+`frontend/src/` is organized as `app/` (router, providers, theme, config), `modules/<domain>/` (current modules: `admin`, `announcements`, `assets`, `auth`, `billing`, `buildings`, `crm`, `inspections`, `integrations`, `leases`, `maintenance`, `marketing` (property listings), `marketing-site` (public landing/pricing), `notifications`, `occupancy`, `onboarding`, `reporting`, `screening`, `signing`, `tenant-portal`, `workspace`), and `shared/` (cross-module components, hooks, `api/` HTTP infra, utils). Within a module, dependency direction is **View → ViewModel → Model → Shared**:
 
 | Layer | Owns |
 | --- | --- |
@@ -78,4 +78,4 @@ First-time Neon setup, migrations, and credential rotation are documented in [RE
 - [docs/api/authentication.md](docs/api/authentication.md) — API contracts.
 - [docs/architecture/authentication.md](docs/architecture/authentication.md) — security boundaries and role model.
 - [docs/decisions/ADR-001-auth-foundation.md](docs/decisions/ADR-001-auth-foundation.md) — dependency evidence for the auth foundation.
-- The maintenance-first release intentionally excludes billing/leases/rent/subscriptions/SMS/native apps/AI features (see README) — don't assume those exist or add them speculatively.
+- Leasing, rent and SaaS subscriptions (manual invoicing) exist; external providers (screening, payments, syndication, accounting, web push) are stub adapters, and SMS, patrols, utilities and native apps do not exist (see README) — don't assume otherwise or add them speculatively.

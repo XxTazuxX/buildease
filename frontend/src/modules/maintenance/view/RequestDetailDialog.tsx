@@ -58,6 +58,14 @@ export function RequestDetailDialog({
                 label={data.priority ?? data.suggested_priority}
               />
             </Stack>
+            <Typography sx={{ whiteSpace: "pre-wrap" }}>
+              {data.description}
+            </Typography>
+            {data.resolution_summary && (
+              <Alert severity="success">
+                Resolution: {data.resolution_summary}
+              </Alert>
+            )}
 
             <Divider />
             <Typography variant="overline" color="text.secondary">
@@ -219,6 +227,20 @@ export function RequestDetailDialog({
               {data.photos.length} photo{data.photos.length === 1 ? "" : "s"}{" "}
               attached
             </Typography>
+            {data.photos.length > 0 && (
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                {data.photos.map((photo, index) => (
+                  <Button
+                    key={photo.id}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void detail.openPhoto(photo.id)}
+                  >
+                    View photo {index + 1}
+                  </Button>
+                ))}
+              </Stack>
+            )}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"

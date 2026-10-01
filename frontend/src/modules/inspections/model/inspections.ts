@@ -85,4 +85,8 @@ export const inspectionsApi = {
       "POST",
       { contentType: photo.type, sizeBytes: photo.size },
     ),
+  downloadPhoto: (org: string, building: string, id: string, photo: string) =>
+    api<{ url: string }>(
+      `${base(org, building)}/${id}/photos/${photo}/download`,
+    ),
 };

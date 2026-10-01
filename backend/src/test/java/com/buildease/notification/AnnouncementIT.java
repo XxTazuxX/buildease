@@ -176,7 +176,7 @@ class AnnouncementIT {
   }
 
   @Test
-  void onlyAManagerCanSendOrViewHistoryButAnyMemberCanReadDetail() {
+  void onlyAManagerCanSendOrViewHistoryButRecipientsCanReadDetail() {
     Setup s = organizationWithBuilding();
     String residentEmail = "resident-" + UUID.randomUUID() + "@example.test";
     Actor resident = inviteResident(s, residentEmail);
@@ -204,5 +204,17 @@ class AnnouncementIT {
             Audience.ALL_RESIDENTS);
     var detail = announcements.detail(resident, s.organization(), s.building(), announcementId);
     assertThat(detail).containsEntry("body", "Body text");
+  }
+
+  @Test
+  void membersOutsideTheAudienceCannotReadAnAnnouncement() {
+    Setup s = organizationWithBuilding();
+    Actor resident = inviteResident(s, "resident-" + UUID.randomUUID() + "@example.test");
+    UUID staffOnly =
+        announcements.send(
+            s.owner(), s.organization(), s.building(), "Staff", "Internal", Audience.ALL_STAFF);
+    assertThatThrownBy(
+            () -> announcements.detail(resident, s.organization(), s.building(), staffOnly))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
 }

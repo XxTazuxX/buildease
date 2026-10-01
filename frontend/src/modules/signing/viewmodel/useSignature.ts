@@ -12,15 +12,22 @@ export function useSignature(org: string, building: string, lease: string) {
     queryFn: () => signaturesApi.status(org, building, lease),
     enabled: !!lease,
   });
-  const sign = async (role: SignatureRole, signedName: string) => {
+  const sign = async (
+    role: SignatureRole,
+    signedName: string,
+    drawing?: string,
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await signaturesApi.sign(org, building, lease, {
-        role,
-        signedName,
-        method: "TYPED",
-      });
+      await signaturesApi.sign(
+        org,
+        building,
+        lease,
+        drawing
+          ? { role, signedName, method: "DRAWN", signatureData: drawing }
+          : { role, signedName, method: "TYPED" },
+      );
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {

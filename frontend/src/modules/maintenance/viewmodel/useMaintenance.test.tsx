@@ -189,6 +189,9 @@ it("useRequestDetail fetches the request and invalidates it after commenting", a
     work_orders: [],
     work_logs: [],
     photos: [],
+    description: "Water is dripping",
+    created_by: "account-1",
+    resolution_summary: null,
   });
   const { result } = renderHook(
     () => useRequestDetail("org", "building", "req-1"),
@@ -263,6 +266,9 @@ it("useRequestDetail adds a work log and updates work costs", async () => {
     work_orders: [],
     work_logs: [],
     photos: [],
+    description: "Water is dripping",
+    created_by: "account-1",
+    resolution_summary: null,
   });
   const { result } = renderHook(
     () => useRequestDetail("org", "building", "req-1"),

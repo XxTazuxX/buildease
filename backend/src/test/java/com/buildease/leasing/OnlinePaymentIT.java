@@ -184,4 +184,29 @@ class OnlinePaymentIT {
                     resident, s.organization(), s.building(), s.lease(), new BigDecimal("500.00")))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
   }
+
+  @Test
+  void retriedPaymentWithSameIdempotencyKeyIsRecordedOnceAndOverpaymentIsRejected() {
+    Setup s = organizationWithActiveLease();
+    Actor resident = actor(s.residentEmail());
+    UUID first =
+        payments.pay(
+            resident, s.organization(), s.building(), s.lease(), new BigDecimal("100.00"), "k-1");
+    UUID retry =
+        payments.pay(
+            resident, s.organization(), s.building(), s.lease(), new BigDecimal("100.00"), "k-1");
+    assertThat(retry).isEqualTo(first);
+    assertThat(payments(s)).hasSize(1);
+    assertThatThrownBy(
+            () ->
+                payments.pay(
+                    resident, s.organization(), s.building(), s.lease(), new BigDecimal("5000.00")))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(400));
+  }
+
+  @SuppressWarnings("unchecked")
+  private java.util.List<Object> payments(Setup s) {
+    return (java.util.List<Object>)
+        leases.lease(s.owner(), s.organization(), s.building(), s.lease()).get("payments");
+  }
 }

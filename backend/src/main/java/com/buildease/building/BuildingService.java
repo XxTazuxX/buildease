@@ -1,6 +1,7 @@
 package com.buildease.building;
 
 import com.buildease.auth.Actor;
+import com.buildease.billing.SubscriptionService;
 import com.buildease.common.ApiException;
 import com.buildease.common.Store;
 import java.math.BigDecimal;
@@ -14,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class BuildingService {
   private final Store db;
 
-  public BuildingService(Store db) {
+  private final SubscriptionService subscriptions;
+
+  public BuildingService(Store db, SubscriptionService subscriptions) {
     this.db = db;
+    this.subscriptions = subscriptions;
   }
 
   private boolean enter(Actor actor, UUID organization, UUID building) {
@@ -42,8 +46,15 @@ public class BuildingService {
     return owner;
   }
 
+  /** Owners, and property managers of this building ({@code building:manage}), may configure it. */
   private void owner(Actor actor, UUID organization, UUID building) {
-    if (!enter(actor, organization, building)) throw ApiException.forbidden();
+    if (enter(actor, organization, building)) return;
+    if (db.find(
+            "select 1 from building_roles where organization_id=? and building_id=? and account_id=? and role='PROPERTY_MANAGER'",
+            organization,
+            building,
+            actor.id())
+        .isEmpty()) throw ApiException.forbidden();
   }
 
   public Map<String, Object> building(Actor actor, UUID organization, UUID building) {
@@ -76,6 +87,21 @@ public class BuildingService {
     } catch (Exception e) {
       throw new ApiException(400, "Unknown timezone");
     }
+    String currentCurrency =
+        (String)
+            db.one(
+                    "select currency from buildings where organization_id=? and id=?",
+                    organization,
+                    building)
+                .get("currency");
+    if (currency != null
+        && !currency.equalsIgnoreCase(currentCurrency)
+        && db.find(
+                "select 1 from leases where organization_id=? and building_id=? limit 1",
+                organization,
+                building)
+            .isPresent())
+      throw new ApiException(409, "Currency cannot change once leases exist for this building");
     db.update(
         "update buildings set name=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,country_code=?,timezone=?,currency=?,emergency_contact=?,late_fee_amount=?,late_fee_grace_days=?,updated_at=now() where organization_id=? and id=?",
         name,
@@ -141,6 +167,7 @@ public class BuildingService {
       Integer capacity,
       String notes) {
     owner(actor, organization, building);
+    subscriptions.requireCapacity(organization, SubscriptionService.Resource.SPACE);
     UUID id = UUID.randomUUID();
     db.update(
         "insert into spaces(id,organization_id,building_id,level_id,parent_space_id,name,code,type,rentable,area,capacity,notes) values (?,?,?,?,?,?,?,?,?,?,?,?)",

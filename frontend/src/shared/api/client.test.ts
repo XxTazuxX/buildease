@@ -164,13 +164,21 @@ it("downloadFile attaches the bearer token and triggers a browser download", asy
     .mockImplementation(() => {});
   const client = await import("./client");
   await client.refresh();
-  await client.downloadFile("/reports/rent-roll/export", "rent-roll.csv");
-  expect(fetch.mock.calls[2][1].headers.Authorization).toBe(
-    "Bearer memory-only",
-  );
-  expect(createObjectURL).toHaveBeenCalled();
-  expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
-  click.mockRestore();
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    await client.downloadFile("/reports/rent-roll/export", "rent-roll.csv");
+    expect(fetch.mock.calls[2][1].headers.Authorization).toBe(
+      "Bearer memory-only",
+    );
+    expect(createObjectURL).toHaveBeenCalled();
+    // The object URL outlives the click so the browser can start the download.
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+  } finally {
+    vi.useRealTimers();
+    click.mockRestore();
+  }
 });
 it("downloadFile throws an ApiError on a failed response without downloading", async () => {
   const fetch = vi

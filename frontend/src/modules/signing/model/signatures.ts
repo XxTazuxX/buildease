@@ -26,6 +26,11 @@ export const signaturesApi = {
     org: string,
     building: string,
     lease: string,
-    body: { role: SignatureRole; signedName: string; method: SignatureMethod },
+    body: {
+      role: SignatureRole;
+      signedName: string;
+      method: SignatureMethod;
+      signatureData?: string;
+    },
   ) => api(base(org, building, lease), "POST", body),
 };

@@ -81,6 +81,7 @@ public class SecurityConfig {
                         "/api/auth/forgot-password",
                         "/api/auth/reset-password",
                         "/api/impersonation/refresh",
+                        "/api/public/plans",
                         "/api/public/v1/**")
                     .permitAll()
                     .requestMatchers("/api/**")

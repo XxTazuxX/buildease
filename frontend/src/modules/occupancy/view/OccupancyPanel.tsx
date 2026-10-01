@@ -120,7 +120,31 @@ export function OccupancyPanel({
                     </Stack>
                   ))}
                 </Stack>
+                {(item.household?.length ?? 0) > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Household:{" "}
+                    {item.household
+                      ?.map((member) =>
+                        member.relationship
+                          ? `${member.name} (${member.relationship})`
+                          : member.name,
+                      )
+                      .join(", ")}
+                  </Typography>
+                )}
               </Box>
+              <Button
+                disabled={vm.busy || !item.active}
+                onClick={() => {
+                  const name = window.prompt("Household member name");
+                  if (!name?.trim()) return;
+                  const relationship =
+                    window.prompt("Relationship (optional)") ?? "";
+                  void vm.addHouseholdMember(item.id, name, relationship);
+                }}
+              >
+                Add household
+              </Button>
               <Button
                 disabled={vm.busy}
                 onClick={() =>

@@ -98,15 +98,15 @@ class OnboardingIT {
   }
 
   @Test
-  void registrationRejectsAnEmailThatAlreadyHasAnAccount() {
+  void registrationForAnExistingEmailLooksAcceptedButOnlyNotifiesTheOwner() {
     String email = "owner-" + UUID.randomUUID() + "@example.test";
     onboarding.register(email, "New Owner", "New Org", password);
     ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
     verify(mail).verification(eq(email), token.capture());
     onboarding.verify(token.getValue());
 
-    assertThatThrownBy(() -> onboarding.register(email, "Again", "Another Org", password))
-        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    onboarding.register(email, "Again", "Another Org", password);
+    verify(mail).accountExists(email);
   }
 
   @Test

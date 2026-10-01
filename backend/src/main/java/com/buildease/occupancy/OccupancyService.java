@@ -94,6 +94,13 @@ public class OccupancyService {
       row.put("assignment_id", first.map(value -> value.get("id")).orElse(null));
       row.put("space_id", first.map(value -> value.get("space_id")).orElse(null));
       row.put("starts_on", first.map(value -> value.get("starts_on")).orElse(null));
+      row.put(
+          "household",
+          db.rows(
+              "select id,name,relationship from household_members where organization_id=? and building_id=? and resident_id=? order by created_at,id",
+              organization,
+              building,
+              row.get("id")));
     }
     return result;
   }
@@ -211,6 +218,11 @@ public class OccupancyService {
             assignment);
     if (!"ACTIVE".equals(row.get("status")))
       throw new ApiException(409, "Assignment is already ended");
+    if (db.find(
+            "select 1 from leases where organization_id=? and assignment_id=? and status='ACTIVE'",
+            organization,
+            assignment)
+        .isPresent()) throw new ApiException(409, "End the active lease for this assignment first");
     LocalDate start = ((java.sql.Date) row.get("starts_on")).toLocalDate();
     if (endsOn.isBefore(start)) throw new ApiException(400, "End date cannot be before start date");
     UUID space = Store.id(row, "space_id");

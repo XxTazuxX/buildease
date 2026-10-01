@@ -1,8 +1,17 @@
 import { useState } from "react";
-import { Alert, Button, Stack, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Button,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import { StatusChip } from "@/shared/components/Surface";
 import type { SignatureRole } from "../model/signatures";
 import { useSignature } from "../viewmodel/useSignature";
+import { SignaturePad } from "./SignaturePad";
 
 export function SignaturePanel({
   org,
@@ -21,6 +30,8 @@ export function SignaturePanel({
 }) {
   const vm = useSignature(org, building, lease);
   const [name, setName] = useState(defaultName);
+  const [style, setStyle] = useState<"typed" | "drawn">("typed");
+  const [drawing, setDrawing] = useState<string | null>(null);
   const mine =
     role === "OWNER" ? vm.status.data?.owner : vm.status.data?.resident;
   const other =
@@ -48,21 +59,42 @@ export function SignaturePanel({
           You signed as {mine.signed_name}.
         </Typography>
       ) : canSign ? (
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <TextField
+        <Stack spacing={1}>
+          <ToggleButtonGroup
+            exclusive
             size="small"
-            label="Type your full legal name to sign"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            sx={{ flexGrow: 1 }}
-          />
-          <Button
-            variant="contained"
-            disabled={vm.busy || !name.trim()}
-            onClick={() => void vm.sign(role, name)}
+            value={style}
+            onChange={(_, value: "typed" | "drawn" | null) =>
+              value && setStyle(value)
+            }
+            aria-label="Signature style"
           >
-            Sign lease
-          </Button>
+            <ToggleButton value="typed">Type</ToggleButton>
+            <ToggleButton value="drawn">Draw</ToggleButton>
+          </ToggleButtonGroup>
+          {style === "drawn" && <SignaturePad onChange={setDrawing} />}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField
+              size="small"
+              label="Type your full legal name to sign"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              sx={{ flexGrow: 1 }}
+            />
+            <Button
+              variant="contained"
+              disabled={
+                vm.busy || !name.trim() || (style === "drawn" && !drawing)
+              }
+              onClick={() =>
+                void (style === "drawn" && drawing
+                  ? vm.sign(role, name, drawing)
+                  : vm.sign(role, name))
+              }
+            >
+              Sign lease
+            </Button>
+          </Stack>
         </Stack>
       ) : null}
     </Stack>

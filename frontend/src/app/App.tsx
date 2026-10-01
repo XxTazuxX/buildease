@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -45,6 +46,9 @@ import {
   PeoplePage,
   PropertiesPage,
 } from "@/modules/workspace";
+import { BillingPage, SubscriptionBanner } from "@/modules/billing";
+import { LandingPage, PricingPage } from "@/modules/marketing-site";
+import { NotificationBell, PushToggle } from "@/modules/notifications";
 
 const drawerWidth = 272;
 const PlatformPage = lazy(() =>
@@ -104,6 +108,12 @@ function NavigationIcon({ name }: { name: string }) {
       <>
         <path d="M12 3 4.5 6v5.2c0 4.6 3.1 8.2 7.5 9.8 4.4-1.6 7.5-5.2 7.5-9.8V6z" />
         <path d="M9 12.2 11 14l4-4" />
+      </>
+    ),
+    billing: (
+      <>
+        <rect x="3" y="5.5" width="18" height="13" rx="2" />
+        <path d="M3 10h18M7 15h4" />
       </>
     ),
     profile: (
@@ -225,6 +235,17 @@ function ProfilePage({
               : `${membershipCount} active organization${membershipCount === 1 ? "" : "s"}`}
           </Typography>
         </Box>
+        <Divider />
+        <Box sx={{ p: 3.5 }}>
+          <Typography variant="overline" color="text.secondary">
+            Notifications
+          </Typography>
+          <PushToggle />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Every notification also appears in the bell at the top of the
+            workspace.
+          </Typography>
+        </Box>
       </Paper>
     </>
   );
@@ -296,7 +317,29 @@ export default function App() {
 
   if (!auth.ready) return <LoadingScreen />;
   if (auth.mustChange) return <ChangePasswordPage />;
-  if (!profile) return <LoginPage />;
+  if (!profile)
+    return (
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/login" element={<LoginPage initialMode={null} />} />
+        <Route
+          path="/register"
+          element={<LoginPage initialMode="register" />}
+        />
+        <Route
+          path="/forgot-password"
+          element={<LoginPage initialMode="forgot" />}
+        />
+        <Route path="/verify" element={<LoginPage initialMode="verify" />} />
+        <Route
+          path="/reset-password"
+          element={<LoginPage initialMode="reset" />}
+        />
+        {/* Deep links sign in in place, then continue to the requested page. */}
+        <Route path="*" element={<LoginPage initialMode={null} />} />
+      </Routes>
+    );
 
   const handleSignOut = () =>
     void (auth.impersonating ? auth.exitImpersonation() : auth.signOut());
@@ -365,6 +408,15 @@ export default function App() {
                     label: "Finance & maintenance",
                     path: `/organizations/${activeOrg}/operations`,
                     icon: "operations",
+                  },
+                ]
+              : []),
+            ...(access?.owner
+              ? [
+                  {
+                    label: "Plan & billing",
+                    path: `/organizations/${activeOrg}/billing`,
+                    icon: "billing",
                   },
                 ]
               : []),
@@ -558,6 +610,8 @@ export default function App() {
   );
   const invalidOrganization =
     !!routeOrg && activeOrg !== routeOrg && !profile.platform_admin;
+  // Never build "/organizations//overview" when the user has no active organization.
+  const fallbackPath = activeOrg ? `/organizations/${activeOrg}/overview` : "/";
   const loadingWorkspace =
     !!activeOrg && (context.access.isLoading || context.buildings.isLoading);
 
@@ -671,6 +725,7 @@ export default function App() {
                 ))}
               </TextField>
             )}
+          {!auth.impersonating && <NotificationBell />}
           {memberships.length > 1 &&
             memberships.some((m) => m.organization_id === activeOrg) && (
               <TextField
@@ -711,6 +766,15 @@ export default function App() {
               </Box>
             }
           >
+            {activeOrg && !loadingWorkspace && !invalidOrganization && (
+              <SubscriptionBanner org={activeOrg} owner={!!access?.owner} />
+            )}
+            {context.access.isError && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                Could not load your access for this organization:{" "}
+                {context.access.error?.message}
+              </Alert>
+            )}
             {loadingWorkspace ? (
               <Box sx={{ py: 10, textAlign: "center" }}>
                 <CircularProgress aria-label="Loading workspace" />
@@ -734,10 +798,7 @@ export default function App() {
                   path="/organizations/:org"
                   element={
                     invalidOrganization ? (
-                      <Navigate
-                        to={`/organizations/${activeOrg}/overview`}
-                        replace
-                      />
+                      <Navigate to={fallbackPath} replace />
                     ) : tenantOnly ? (
                       <TenantPortalPage org={activeOrg} />
                     ) : (
@@ -749,10 +810,7 @@ export default function App() {
                   path="/organizations/:org/overview"
                   element={
                     invalidOrganization ? (
-                      <Navigate
-                        to={`/organizations/${activeOrg}/overview`}
-                        replace
-                      />
+                      <Navigate to={fallbackPath} replace />
                     ) : tenantOnly ? (
                       <Navigate to={`/organizations/${activeOrg}`} replace />
                     ) : (
@@ -775,10 +833,7 @@ export default function App() {
                   path="/organizations/:org/properties"
                   element={
                     invalidOrganization ? (
-                      <Navigate
-                        to={`/organizations/${activeOrg}/overview`}
-                        replace
-                      />
+                      <Navigate to={fallbackPath} replace />
                     ) : tenantOnly ? (
                       <Navigate to={`/organizations/${activeOrg}`} replace />
                     ) : (
@@ -794,10 +849,7 @@ export default function App() {
                   path="/organizations/:org/people"
                   element={
                     invalidOrganization ? (
-                      <Navigate
-                        to={`/organizations/${activeOrg}/overview`}
-                        replace
-                      />
+                      <Navigate to={fallbackPath} replace />
                     ) : !canPeopleAnywhere ? (
                       <Navigate
                         to={`/organizations/${activeOrg}/overview${workspaceQuery}`}
@@ -812,10 +864,7 @@ export default function App() {
                   path="/organizations/:org/operations"
                   element={
                     invalidOrganization ? (
-                      <Navigate
-                        to={`/organizations/${activeOrg}/overview`}
-                        replace
-                      />
+                      <Navigate to={fallbackPath} replace />
                     ) : !canOperationsAnywhere ? (
                       <Navigate
                         to={`/organizations/${activeOrg}/overview${workspaceQuery}`}
@@ -834,12 +883,22 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/organizations/:org/billing"
+                  element={
+                    invalidOrganization || !access?.owner ? (
+                      <Navigate to={fallbackPath} replace />
+                    ) : (
+                      <BillingPage org={activeOrg} />
+                    )
+                  }
+                />
+                <Route
                   path="/admin"
                   element={
                     profile.platform_admin ? (
                       <PlatformPage />
                     ) : (
-                      <Navigate to="/" />
+                      <Navigate to="/" replace />
                     )
                   }
                 />
@@ -866,7 +925,7 @@ export default function App() {
                     )
                   }
                 />
-                <Route path="*" element={<Navigate to="/" />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             )}
           </Suspense>

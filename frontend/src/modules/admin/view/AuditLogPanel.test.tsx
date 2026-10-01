@@ -6,6 +6,7 @@ import { usePlatformAudit } from "../viewmodel/useAdmin";
 
 vi.mock("../viewmodel/useAdmin", () => ({
   usePlatformAudit: vi.fn(),
+  useOrgAudit: vi.fn(() => ({ data: [], error: null, isLoading: false })),
 }));
 
 const directEntry = {
@@ -43,5 +44,10 @@ it("passes the typed organization filter through to the query", async () => {
   await userEvent
     .setup()
     .type(screen.getByLabelText("Organization ID"), "org-123");
-  expect(usePlatformAudit).toHaveBeenLastCalledWith(0, "org-123", undefined);
+  expect(usePlatformAudit).toHaveBeenLastCalledWith(
+    0,
+    "org-123",
+    undefined,
+    true,
+  );
 });

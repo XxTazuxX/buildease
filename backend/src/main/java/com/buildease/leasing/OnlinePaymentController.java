@@ -26,7 +26,9 @@ public class OnlinePaymentController {
       @PathVariable UUID organization,
       @PathVariable UUID building,
       @PathVariable UUID lease,
+      @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
       @Valid @RequestBody PayBody body) {
-    return Map.of("id", service.pay(actor, organization, building, lease, body.amount()));
+    return Map.of(
+        "id", service.pay(actor, organization, building, lease, body.amount(), idempotencyKey));
   }
 }

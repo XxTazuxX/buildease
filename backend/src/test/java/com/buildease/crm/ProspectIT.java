@@ -260,4 +260,27 @@ class ProspectIT {
         null,
         null);
   }
+
+  @Test
+  void funnelOnlyMovesForward() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect =
+        prospects.create(
+            s.owner(),
+            s.organization(),
+            s.building(),
+            s.space(),
+            null,
+            "Jane Prospect",
+            null,
+            null,
+            null);
+    prospects.updateStatus(
+        s.owner(), s.organization(), s.building(), prospect, ProspectStatus.APPLIED, null);
+    assertThatThrownBy(
+            () ->
+                prospects.updateStatus(
+                    s.owner(), s.organization(), s.building(), prospect, ProspectStatus.NEW, null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+  }
 }

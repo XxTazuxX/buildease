@@ -400,4 +400,28 @@ class LeaseIT {
             () -> leases.forfeitDeposit(a.owner(), a.organization(), a.building(), leaseB, "Again"))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
   }
+
+  @Test
+  void refundCannotExceedHeldDepositAndActiveLeaseBlocksEndingItsAssignment() {
+    Setup a = organizationWithRentableSpaceAndResident();
+    LocalDate startsOn = LocalDate.now();
+    UUID lease = draftLease(a, startsOn);
+    assertThatThrownBy(
+            () ->
+                leases.refundDeposit(
+                    a.owner(),
+                    a.organization(),
+                    a.building(),
+                    lease,
+                    startsOn,
+                    new BigDecimal("1200.01"),
+                    null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(400));
+    leases.activate(a.owner(), a.organization(), a.building(), lease);
+    UUID assignment =
+        (UUID) leases.lease(a.owner(), a.organization(), a.building(), lease).get("assignment_id");
+    assertThatThrownBy(
+            () -> occupancy.end(a.owner(), a.organization(), a.building(), assignment, startsOn))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+  }
 }

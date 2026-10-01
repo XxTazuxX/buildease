@@ -1,6 +1,7 @@
 package com.buildease.onboarding;
 
 import com.buildease.auth.AuthService;
+import com.buildease.billing.SubscriptionService;
 import com.buildease.common.*;
 import com.buildease.security.PasswordPolicy;
 import java.security.SecureRandom;
@@ -17,18 +18,20 @@ public class OnboardingService {
   private final IdentityMail mail;
   private final SecureRandom random = new SecureRandom();
 
-  public OnboardingService(Store db, PasswordEncoder passwords, IdentityMail mail) {
+  private final SubscriptionService subscriptions;
+
+  public OnboardingService(
+      Store db, PasswordEncoder passwords, IdentityMail mail, SubscriptionService subscriptions) {
     this.db = db;
     this.passwords = passwords;
     this.mail = mail;
+    this.subscriptions = subscriptions;
   }
 
   @Transactional
   public void register(String email, String displayName, String organizationName, String password) {
     String normalized = AuthService.email(email);
     PasswordPolicy.validate(password);
-    if (db.find("select 1 from accounts where email=?", normalized).isPresent())
-      throw new ApiException(409, "An account already exists for this email");
     long attempts =
         ((Number)
                 db.one(
@@ -38,6 +41,20 @@ public class OnboardingService {
             .longValue();
     if (attempts >= 3)
       throw new ApiException(429, "Too many registration attempts. Try again later.");
+    // Respond identically whether or not the email is registered, so the endpoint cannot be used
+    // to discover accounts. The existing owner is told by email instead.
+    if (db.find("select 1 from accounts where email=?", normalized).isPresent()) {
+      db.update(
+          "insert into registration_requests(id,token_hash,email,display_name,organization_name,password_hash,expires_at,consumed_at) values (?,?,?,?,?,?,now(),now())",
+          UUID.randomUUID(),
+          AuthService.hash(opaque()),
+          normalized,
+          displayName.trim(),
+          organizationName.trim(),
+          "-");
+      mail.accountExists(normalized);
+      return;
+    }
     String token = opaque();
     db.update(
         "update registration_requests set consumed_at=now() where email=? and consumed_at is null",
@@ -81,6 +98,7 @@ public class OnboardingService {
         "insert into memberships(organization_id,account_id,owner,status) values (?,?,true,'ACTIVE')",
         organization,
         account);
+    subscriptions.startTrial(organization);
     db.update("update registration_requests set consumed_at=now() where id=?", request.get("id"));
     db.audit(account, organization, "OWNER_SELF_REGISTERED", organization);
     return organization;

@@ -63,7 +63,7 @@ public class ImpersonationService {
     if (token == null) throw denied();
     var found =
         db.find(
-            "select t.used,s.id as session_id,s.target_account_id,s.admin_account_id,s.ended_at "
+            "select t.used,s.id as session_id,s.target_account_id,s.admin_account_id,s.ended_at,s.started_at<now()-interval '1 hour' as expired "
                 + "from impersonation_refresh_tokens t join impersonation_sessions s on s.id=t.impersonation_session_id "
                 + "where t.token_hash=? for update of t,s",
             AuthService.hash(token));
@@ -77,6 +77,13 @@ public class ImpersonationService {
       throw denied();
     }
     if (row.get("ended_at") != null) throw denied();
+    // Impersonation is a short support action: sessions end one hour after they start.
+    if ((boolean) row.get("expired")) {
+      db.update(
+          "update impersonation_sessions set ended_at=now() where id=? and ended_at is null",
+          sessionId);
+      throw denied();
+    }
     UUID target = Store.id(row, "target_account_id");
     UUID admin = Store.id(row, "admin_account_id");
     if (db.find("select 1 from accounts where id=? and active and platform_admin", admin).isEmpty())

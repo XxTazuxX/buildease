@@ -231,4 +231,73 @@ class LeaseSignatureIT {
             signatures.status(s.owner(), s.organization(), s.building(), s.lease()).get("owner");
     assertThat(owner).containsEntry("signed_name", "Corrected Name");
   }
+
+  @Test
+  void managerCannotSignForTheResidentAndPartialSigningBlocksActivation() {
+    Setup s = organizationWithDraftLease();
+    assertThatThrownBy(
+            () ->
+                signatures.sign(
+                    s.owner(),
+                    s.organization(),
+                    s.building(),
+                    s.lease(),
+                    SignatureRole.RESIDENT,
+                    "Forged Resident",
+                    SignatureMethod.TYPED,
+                    null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    signatures.sign(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.lease(),
+        SignatureRole.OWNER,
+        "Owner Name",
+        SignatureMethod.TYPED,
+        null);
+    assertThatThrownBy(() -> leases.activate(s.owner(), s.organization(), s.building(), s.lease()))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    Actor resident = actor(s.residentEmail());
+    signatures.sign(
+        resident,
+        s.organization(),
+        s.building(),
+        s.lease(),
+        SignatureRole.RESIDENT,
+        "Resident Name",
+        SignatureMethod.TYPED,
+        null);
+    assertThatThrownBy(
+            () ->
+                signatures.sign(
+                    s.owner(),
+                    s.organization(),
+                    s.building(),
+                    s.lease(),
+                    SignatureRole.OWNER,
+                    "Changed After Execution",
+                    SignatureMethod.TYPED,
+                    null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    leases.activate(s.owner(), s.organization(), s.building(), s.lease());
+  }
+
+  @Test
+  void cancelledLeasesCannotBeSigned() {
+    Setup s = organizationWithDraftLease();
+    leases.cancel(s.owner(), s.organization(), s.building(), s.lease());
+    assertThatThrownBy(
+            () ->
+                signatures.sign(
+                    s.owner(),
+                    s.organization(),
+                    s.building(),
+                    s.lease(),
+                    SignatureRole.OWNER,
+                    "Owner Name",
+                    SignatureMethod.TYPED,
+                    null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+  }
 }

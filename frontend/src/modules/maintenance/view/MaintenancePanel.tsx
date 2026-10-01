@@ -13,8 +13,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Pager } from "@/shared/components/Pager";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useMaintenance } from "../viewmodel/useMaintenance";
+import { RecurringPlansDialog } from "./RecurringPlansDialog";
 import { ReportIssueDialog } from "./ReportIssueDialog";
 import { RequestDetailDialog } from "./RequestDetailDialog";
 
@@ -36,6 +38,7 @@ export function MaintenancePanel({
   const [viewingRequest, setViewingRequest] = useState<string | null>(null);
   const [assigningRequest, setAssigningRequest] = useState<string | null>(null);
   const [vendorsOpen, setVendorsOpen] = useState(false);
+  const [recurringOpen, setRecurringOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<"staff" | "vendor">(
     "vendor",
   );
@@ -90,6 +93,11 @@ export function MaintenancePanel({
           {canManage && (
             <Button variant="outlined" onClick={() => setVendorsOpen(true)}>
               Vendors
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="outlined" onClick={() => setRecurringOpen(true)}>
+              Recurring
             </Button>
           )}
           {canReport && (
@@ -193,6 +201,7 @@ export function MaintenancePanel({
                     <Button
                       disabled={vm.busy}
                       onClick={() => {
+                        void vm.members?.refetch();
                         setAssignTarget("vendor");
                         setAssignAccountId("");
                         setAssignVendorId("");
@@ -230,12 +239,49 @@ export function MaintenancePanel({
                       Confirm resolved
                     </Button>
                   )}
+                  {canManage && item.status === "RESOLVED" && (
+                    <Button
+                      disabled={vm.busy}
+                      onClick={() => void vm.close(item.id, false)}
+                    >
+                      Reopen
+                    </Button>
+                  )}
+                  {canManage &&
+                    !["CLOSED", "CANCELLED"].includes(item.status) && (
+                      <Button
+                        color="error"
+                        disabled={vm.busy}
+                        onClick={() => {
+                          const reason = window.prompt("Reason for cancelling");
+                          if (reason?.trim()) void vm.cancel(item.id, reason);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
                 </Stack>
               </Stack>
             </Paper>
           );
         })}
       </Stack>
+      {(vm.page > 0 || (vm.requests.data?.length ?? 0) >= 50) && (
+        <Pager
+          page={vm.page}
+          count={vm.requests.data?.length ?? 0}
+          onChange={vm.setPage}
+        />
+      )}
+      {canManage && recurringOpen && (
+        <RecurringPlansDialog
+          org={org}
+          building={building}
+          categories={vm.categories.data ?? []}
+          spaces={vm.spaces.data ?? []}
+          onClose={() => setRecurringOpen(false)}
+        />
+      )}
       {canReport && (
         <ReportIssueDialog
           open={createOpen}
@@ -407,11 +453,23 @@ export function MaintenancePanel({
                 </TextField>
               ) : (
                 <TextField
-                  label="Staff account ID"
-                  helperText="Copy the account ID from the People page"
+                  select
+                  label="Staff member"
+                  helperText="Must hold the Maintenance staff or Property manager role here"
                   value={assignAccountId}
                   onChange={(e) => setAssignAccountId(e.target.value)}
-                />
+                >
+                  {(vm.members?.data ?? [])
+                    .filter((member) => member.status === "ACTIVE")
+                    .map((member) => (
+                      <MenuItem
+                        key={member.account_id}
+                        value={member.account_id}
+                      >
+                        {member.display_name} · {member.email}
+                      </MenuItem>
+                    ))}
+                </TextField>
               )}
               <TextField
                 label="Estimated cost (optional)"

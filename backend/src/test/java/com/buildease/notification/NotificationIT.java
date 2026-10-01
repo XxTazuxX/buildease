@@ -140,11 +140,14 @@ class NotificationIT {
     assertThat(inbox.getFirst().get("read_at")).isNull();
 
     assertThat(notifications.inbox(staff, true, 0)).hasSize(1);
+    assertThat(notifications.unreadCount(staff)).containsEntry("unread", 1L);
 
     UUID notificationId = com.buildease.common.Store.id(inbox.getFirst(), "id");
     notifications.read(staff, notificationId);
 
     assertThat(notifications.inbox(staff, true, 0)).isEmpty();
+    assertThat(notifications.unreadCount(staff)).containsEntry("unread", 0L);
+    notifications.readAll(staff);
     assertThat(notifications.inbox(staff, false, 0).getFirst().get("read_at")).isNotNull();
 
     assertThatThrownBy(() -> notifications.read(staff, UUID.randomUUID()))

@@ -42,10 +42,20 @@ public class OnlinePaymentService {
   }
 
   public UUID pay(Actor actor, UUID organization, UUID building, UUID lease, BigDecimal amount) {
+    return pay(actor, organization, building, lease, amount, null);
+  }
+
+  public UUID pay(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID lease,
+      BigDecimal amount,
+      String idempotencyKey) {
     Access access = enter(actor, organization, building);
     var row =
         db.one(
-            "select resident_id,status,currency from leases where organization_id=? and building_id=? and id=?",
+            "select resident_id,status,currency,rent_amount from leases where organization_id=? and building_id=? and id=? for update",
             organization,
             building,
             lease);
@@ -59,11 +69,31 @@ public class OnlinePaymentService {
     if (!access.manager() && !isResident) throw ApiException.forbidden();
     if (!"ACTIVE".equals(row.get("status")))
       throw new ApiException(409, "Payments require an active lease");
+    String key = idempotencyKey == null || idempotencyKey.isBlank() ? null : idempotencyKey.trim();
+    if (key != null && key.length() > 120) throw new ApiException(400, "Idempotency key too long");
+    if (key != null) {
+      var existing =
+          db.find("select id from payments where lease_id=? and idempotency_key=?", lease, key);
+      if (existing.isPresent()) return Store.id(existing.get(), "id");
+    }
+    if (amount == null || amount.signum() <= 0)
+      throw new ApiException(400, "Payment amount must be positive");
+    BigDecimal balance =
+        (BigDecimal)
+            db.one(
+                    "select coalesce((select sum(amount) from charges where lease_id=?),0)-coalesce((select sum(amount) from payments where lease_id=?),0) as balance",
+                    lease,
+                    lease)
+                .get("balance");
+    // Allow paying the outstanding balance plus at most one month of rent in advance.
+    BigDecimal ceiling = balance.max(BigDecimal.ZERO).add((BigDecimal) row.get("rent_amount"));
+    if (amount.compareTo(ceiling) > 0)
+      throw new ApiException(400, "Payment exceeds the outstanding balance plus one month of rent");
     var result = gateway.charge(lease, amount, (String) row.get("currency"));
     if (!"SUCCEEDED".equals(result.status())) throw new ApiException(402, "Payment was declined");
     UUID id = UUID.randomUUID();
     db.update(
-        "insert into payments(id,organization_id,building_id,lease_id,amount,currency,method,reference,received_on,recorded_by,notes) values (?,?,?,?,?,?,'CARD',?,current_date,?,?)",
+        "insert into payments(id,organization_id,building_id,lease_id,amount,currency,method,reference,received_on,recorded_by,notes,idempotency_key) values (?,?,?,?,?,?,'CARD',?,current_date,?,?,?)",
         id,
         organization,
         building,
@@ -72,7 +102,8 @@ public class OnlinePaymentService {
         row.get("currency"),
         result.gatewayReference(),
         actor.id(),
-        "Online payment (test gateway)");
+        "Online payment (test gateway)",
+        key);
     db.audit(actor.id(), organization, "ONLINE_PAYMENT_SUCCEEDED", id);
     return id;
   }

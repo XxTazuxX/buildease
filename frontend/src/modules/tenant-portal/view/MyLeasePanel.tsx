@@ -14,6 +14,8 @@ import {
 } from "@/modules/leases/viewmodel/useLeases";
 import { useAuth } from "@/modules/auth/viewmodel/AuthProvider";
 import { SignaturePanel } from "@/modules/signing";
+import { QueryError } from "@/shared/components/QueryError";
+import { formatDate } from "@/shared/utils/dates";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -54,7 +56,8 @@ export function MyLeasePanel({
         My lease
       </Typography>
       <Typography variant="h5">Lease &amp; balance</Typography>
-      {!lease ? (
+      <QueryError queries={[vm.leases, detail]} what="your lease" />
+      {vm.leases.isError ? null : !lease ? (
         <Typography color="text.secondary" sx={{ mt: 1 }}>
           No lease on file yet.
         </Typography>
@@ -68,7 +71,7 @@ export function MyLeasePanel({
             />
             <Stat
               label="Next charge"
-              value={new Date(lease.next_charge_on).toLocaleDateString()}
+              value={formatDate(lease.next_charge_on)}
             />
             <Stat
               label="Balance"
@@ -92,7 +95,7 @@ export function MyLeasePanel({
                   sx={{ justifyContent: "space-between" }}
                 >
                   <Typography variant="body2">
-                    Rent charge · due {new Date(c.due_on).toLocaleDateString()}
+                    Rent charge · due {formatDate(c.due_on)}
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     {c.amount} {c.currency}
@@ -106,8 +109,7 @@ export function MyLeasePanel({
                   sx={{ justifyContent: "space-between" }}
                 >
                   <Typography variant="body2">
-                    Payment · {new Date(p.received_on).toLocaleDateString()} (
-                    {p.method})
+                    Payment · {formatDate(p.received_on)} ({p.method})
                   </Typography>
                   <Typography
                     variant="body2"

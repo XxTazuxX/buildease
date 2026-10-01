@@ -20,15 +20,12 @@ import {
   useRentRoll,
   useReportExports,
 } from "../viewmodel/useReporting";
+import { todayIso } from "@/shared/utils/dates";
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+// Local calendar dates; toISOString() would shift them across the UTC boundary.
 function firstOfMonthIso() {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
+  return todayIso(new Date(now.getFullYear(), now.getMonth(), 1));
 }
 
 export function ReportsPanel({

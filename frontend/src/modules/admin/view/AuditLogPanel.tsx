@@ -8,48 +8,58 @@ import {
   Typography,
 } from "@mui/material";
 import { Pager } from "@/shared/components/Pager";
-import { usePlatformAudit } from "../viewmodel/useAdmin";
+import { useOrgAudit, usePlatformAudit } from "../viewmodel/useAdmin";
 
-export function AuditLogPanel() {
+/** Platform-wide audit trail, or a single organization's trail when `org` is given. */
+export function AuditLogPanel({ org }: { org?: string } = {}) {
   const [page, setPage] = useState(0);
   const [organizationId, setOrganizationId] = useState("");
   const [actorId, setActorId] = useState("");
-  const query = usePlatformAudit(
+  const platformQuery = usePlatformAudit(
     page,
     organizationId || undefined,
     actorId || undefined,
+    !org,
   );
+  const orgQuery = useOrgAudit(org ?? "", page);
+  const query = org ? orgQuery : platformQuery;
   return (
     <Stack spacing={2}>
       <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="overline" color="primary.main">
-          Platform audit
+          {org ? "Organization audit" : "Platform audit"}
         </Typography>
-        <Typography variant="h5">Activity across every organization</Typography>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          sx={{ mt: 2 }}
-        >
-          <TextField
-            label="Organization ID"
-            value={organizationId}
-            onChange={(e) => {
-              setOrganizationId(e.target.value);
-              setPage(0);
-            }}
-            sx={{ flexGrow: 1 }}
-          />
-          <TextField
-            label="Actor ID"
-            value={actorId}
-            onChange={(e) => {
-              setActorId(e.target.value);
-              setPage(0);
-            }}
-            sx={{ flexGrow: 1 }}
-          />
-        </Stack>
+        <Typography variant="h5">
+          {org
+            ? "Recent activity in this organization"
+            : "Activity across every organization"}
+        </Typography>
+        {!org && (
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            sx={{ mt: 2 }}
+          >
+            <TextField
+              label="Organization ID"
+              value={organizationId}
+              onChange={(e) => {
+                setOrganizationId(e.target.value);
+                setPage(0);
+              }}
+              sx={{ flexGrow: 1 }}
+            />
+            <TextField
+              label="Actor ID"
+              value={actorId}
+              onChange={(e) => {
+                setActorId(e.target.value);
+                setPage(0);
+              }}
+              sx={{ flexGrow: 1 }}
+            />
+          </Stack>
+        )}
       </Paper>
       {query.error && <Alert severity="error">{query.error.message}</Alert>}
       {!query.isLoading && query.data?.length === 0 && (
@@ -85,9 +95,11 @@ export function AuditLogPanel() {
             </Stack>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
               Actor {e.actor_id.slice(0, 8)} · Target {e.target_id.slice(0, 8)}
-              {e.organization_id
-                ? ` · Org ${e.organization_id.slice(0, 8)}`
-                : " · Platform"}
+              {org
+                ? ""
+                : e.organization_id
+                  ? ` · Org ${e.organization_id.slice(0, 8)}`
+                  : " · Platform"}
             </Typography>
           </Paper>
         ))}

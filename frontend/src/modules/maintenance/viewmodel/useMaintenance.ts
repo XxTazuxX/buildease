@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { adminApi } from "@/modules/admin/model/admin";
 import { buildingsApi } from "@/modules/buildings/model/buildings";
+import { fetchAllPages } from "@/shared/api/client";
 import {
   maintenanceApi,
+  recurringPlanSchema,
   requestSchema,
   stripPhotoMetadata,
   type NewMaintenanceRequest,
+  type NewRecurringPlan,
   type Priority,
 } from "../model/maintenance";
 
@@ -14,14 +18,18 @@ export function useMaintenance(org: string, building: string) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const key = [org, "building", building, "maintenance"];
+  // Paging is per building: switching buildings starts again at the first page.
+  const [paging, setPaging] = useState({ building, page: 0 });
+  const page = paging.building === building ? paging.page : 0;
+  const setPage = (next: number) => setPaging({ building, page: next });
   const categories = useQuery({
     queryKey: [...key, "categories"],
     queryFn: () => maintenanceApi.categories(org, building),
     enabled: !!building,
   });
   const requests = useQuery({
-    queryKey: [...key, "requests"],
-    queryFn: () => maintenanceApi.requests(org, building),
+    queryKey: [...key, "requests", "page", page],
+    queryFn: () => maintenanceApi.requests(org, building, page),
     enabled: !!building,
   });
   const spaces = useQuery({
@@ -33,6 +41,13 @@ export function useMaintenance(org: string, building: string) {
     queryKey: [...key, "vendors"],
     queryFn: () => maintenanceApi.vendors(org, building),
     enabled: !!building,
+  });
+  // Candidate assignees; the backend only accepts maintenance staff, managers and owners.
+  const members = useQuery({
+    queryKey: [org, "building", building, "members", "all"],
+    queryFn: () =>
+      fetchAllPages((page) => adminApi.members(org, building, page)),
+    enabled: false,
   });
   const run = async (operation: () => Promise<unknown>) => {
     setBusy(true);
@@ -51,10 +66,15 @@ export function useMaintenance(org: string, building: string) {
   return {
     categories,
     requests,
+    page,
+    setPage,
     spaces,
     vendors,
+    members,
     error,
     busy,
+    cancel: (id: string, reason: string) =>
+      run(() => maintenanceApi.cancel(org, building, id, reason)),
     submit: async (body: NewMaintenanceRequest, file?: File) => {
       setBusy(true);
       setError("");
@@ -190,6 +210,24 @@ export function useRequestDetail(
     body: { estimatedCost?: number; actualCost?: number },
   ) =>
     run(() => maintenanceApi.updateWorkCosts(org, building, workOrder, body));
+  const cancel = (reason: string) =>
+    run(() => maintenanceApi.cancel(org, building, request, reason));
+  const openPhoto = async (photo: string) => {
+    setError("");
+    try {
+      const { url } = await maintenanceApi.downloadPhoto(
+        org,
+        building,
+        request,
+        photo,
+      );
+      window.open(url, "_blank", "noopener");
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Photo unavailable");
+      return false;
+    }
+  };
   const uploadPhoto = async (file: File) => {
     setBusy(true);
     setError("");
@@ -226,5 +264,38 @@ export function useRequestDetail(
     addWorkLog,
     updateWorkCosts,
     uploadPhoto,
+    openPhoto,
+    cancel,
   };
+}
+
+export function useRecurringPlans(org: string, building: string) {
+  const cache = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const key = [org, "building", building, "maintenance", "recurring-plans"];
+  const plans = useQuery({
+    queryKey: key,
+    queryFn: () => maintenanceApi.recurringPlans(org, building),
+    enabled: !!building,
+  });
+  const create = async (body: NewRecurringPlan) => {
+    setBusy(true);
+    setError("");
+    try {
+      await maintenanceApi.createRecurringPlan(
+        org,
+        building,
+        recurringPlanSchema.parse(body),
+      );
+      await cache.invalidateQueries({ queryKey: key });
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save plan");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { plans, busy, error, create };
 }
