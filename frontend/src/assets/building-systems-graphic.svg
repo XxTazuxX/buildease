@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 600" fill="none">
+  <defs>
+    <linearGradient id="roof" x1="169" y1="112" x2="456" y2="258" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5D9AE"/>
+      <stop offset="1" stop-color="#DDA477"/>
+    </linearGradient>
+    <linearGradient id="leftWall" x1="160" y1="160" x2="328" y2="438" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#90B5A0"/>
+      <stop offset="1" stop-color="#527C70"/>
+    </linearGradient>
+    <linearGradient id="rightWall" x1="322" y1="246" x2="474" y2="413" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9825E"/>
+      <stop offset="1" stop-color="#914E42"/>
+    </linearGradient>
+    <linearGradient id="base" x1="176" y1="383" x2="501" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9C7A5"/>
+      <stop offset="1" stop-color="#988F73"/>
+    </linearGradient>
+    <filter id="shadow" x="67" y="48" width="550" height="512" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="22"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix values="0 0 0 0 0.02 0 0 0 0 0.10 0 0 0 0 0.10 0 0 0 0.42 0"/>
+      <feBlend in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+    <pattern id="groundGrid" width="22" height="22" patternTransform="matrix(.866 .5 -.866 .5 340 340)" patternUnits="userSpaceOnUse">
+      <path d="M22 0H0v22" stroke="#C3D8C8" stroke-opacity=".13"/>
+    </pattern>
+  </defs>
+
+  <!-- Fine site-plan rings and connection routes -->
+  <circle cx="340" cy="294" r="244" stroke="#C3D8C8" stroke-opacity=".17" stroke-dasharray="3 8"/>
+  <circle cx="340" cy="294" r="194" stroke="#C3D8C8" stroke-opacity=".22"/>
+  <circle cx="340" cy="294" r="148" stroke="#C3D8C8" stroke-opacity=".15" stroke-dasharray="2 7"/>
+  <path d="M104 182 191 211M576 183 472 218M99 424l99-42m385 43-99-43" stroke="#C3D8C8" stroke-opacity=".42" stroke-width="1.5" stroke-dasharray="4 6"/>
+  <circle cx="104" cy="182" r="5" fill="#EAA16E"/>
+  <circle cx="576" cy="183" r="5" fill="#9BC1A7"/>
+  <circle cx="99" cy="424" r="5" fill="#9BC1A7"/>
+  <circle cx="562" cy="425" r="5" fill="#EAA16E"/>
+
+  <!-- Ground plane -->
+  <path d="m111 422 220-125 241 128-223 130z" fill="url(#groundGrid)" stroke="#C3D8C8" stroke-opacity=".27"/>
+  <path d="m123 425 209-118 228 121-211 119z" fill="url(#base)" stroke="#F4E6C8" stroke-opacity=".8" stroke-width="1.5"/>
+  <path d="m123 425 226 120v23L123 448z" fill="#7A7969"/>
+  <path d="m349 545 211-119v22L349 568z" fill="#655D50"/>
+
+  <!-- Connected apartment building cutaway -->
+  <g filter="url(#shadow)">
+    <path d="m164 182 157-88 187 99-161 91z" fill="url(#roof)" stroke="#F7E8CA" stroke-width="2"/>
+    <path d="m164 182 183 102v188L164 370z" fill="url(#leftWall)" stroke="#CBE0C9" stroke-opacity=".8" stroke-width="2"/>
+    <path d="m347 284 161-91v188l-161 91z" fill="url(#rightWall)" stroke="#F1C09A" stroke-opacity=".8" stroke-width="2"/>
+
+    <!-- Roof access and plant equipment -->
+    <path d="m278 122 37-21 36 19-37 21z" fill="#F8E9CC" stroke="#A96B52" stroke-width="1.5"/>
+    <path d="m278 122 36 19v30l-36-20z" fill="#A6B59A"/>
+    <path d="m314 141 37-21v30l-37 21z" fill="#B86C50"/>
+    <path d="m385 154 38 20-30 17-38-21z" fill="#698777" stroke="#E7D6B6" stroke-width="1.5"/>
+    <path d="m385 154v20m13 17v-20m13 13v-20" stroke="#DCE5CB" stroke-opacity=".8"/>
+
+    <!-- Floor datum lines -->
+    <path d="m164 244 183 102 161-91M164 307l183 102 161-91" stroke="#E4D4B6" stroke-opacity=".72" stroke-width="2"/>
+    <path d="m347 346 161-91m-161 154 161-91" stroke="#6F443C" stroke-opacity=".34"/>
+
+    <!-- Left facade windows -->
+    <path d="m188 207 42 23v36l-42-23zm66 37 42 23v36l-42-23zm-66 26 42 23v36l-42-23zm66 37 42 23v36l-42-23zm-66 27 42 23v36l-42-23zm66 37 42 23v36l-42-23z" fill="#D6E3C8" stroke="#355F56" stroke-width="2"/>
+    <path d="m209 218v36m66 1v36m-66 26v36m66 1v36m-66 27v36m66 1v36" stroke="#8AA994" stroke-width="1.5"/>
+
+    <!-- Right facade windows -->
+    <path d="m370 278 38-22v36l-38 22zm68-39 38-22v36l-38 22zm-68 102 38-22v36l-38 22zm68-39 38-22v36l-38 22zm-68 102 38-22v36l-38 22zm68-39 38-22v36l-38 22z" fill="#F5D7AD" stroke="#814A3F" stroke-width="2"/>
+    <path d="m389 267v37m68-76v37m-68 65v37m68-76v37m-68 65v37m68-76v37" stroke="#D89168" stroke-width="1.5"/>
+
+    <!-- Entry, threshold, and accessible shared route -->
+    <path d="m322 359 40 22v67l-40-22z" fill="#244B47" stroke="#D9D5B8" stroke-width="2"/>
+    <circle cx="350" cy="419" r="2.5" fill="#F3C986"/>
+    <path d="m314 356 48 27v9l-48-27z" fill="#E7C795"/>
+    <path d="m323 449 39 22v-13l-39-22z" fill="#B59064"/>
+
+    <!-- Thin service line linking floors -->
+    <path d="m337 306v40m0 63v32" stroke="#F7D281" stroke-width="2" stroke-dasharray="4 5"/>
+    <circle cx="337" cy="300" r="5" fill="#F7D281" stroke="#143534" stroke-width="2"/>
+    <circle cx="337" cy="352" r="5" fill="#F7D281" stroke="#143534" stroke-width="2"/>
+    <circle cx="337" cy="414" r="5" fill="#F7D281" stroke="#143534" stroke-width="2"/>
+  </g>
+
+  <!-- Small abstract operational glyphs, no people or silhouettes -->
+  <g stroke="#F2EFDC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="104" cy="182" r="27" fill="#1B4140" stroke="#EAA16E" stroke-width="1.5"/>
+    <path d="M94 193v-19l10-6 10 6v19m-13 0v-9h6v9m-8-13h.01m10 0h.01"/>
+    <circle cx="576" cy="183" r="27" fill="#1B4140" stroke="#9BC1A7" stroke-width="1.5"/>
+    <path d="M566 175h20v16h-20zm4 5h12m-12 4h8m-8 4h10"/>
+    <circle cx="99" cy="424" r="27" fill="#1B4140" stroke="#9BC1A7" stroke-width="1.5"/>
+    <path d="M109 415a8 8 0 0 0-10 10l-7 7a3 3 0 0 0 4 4l7-7a8 8 0 0 0 10-10l-5 5-5-5z"/>
+    <circle cx="562" cy="425" r="27" fill="#1B4140" stroke="#EAA16E" stroke-width="1.5"/>
+    <path d="M562 411v28m7-21h-10a4 4 0 0 0 0 8h6a4 4 0 0 1 0 8h-10"/>
+  </g>
+</svg>
