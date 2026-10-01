@@ -14,6 +14,7 @@ BuildEase bills customer organizations with manual invoices: the platform operat
 
 - Self-registration starts a 14-day trial on the hidden `TRIAL` plan. Organizations created by a platform administrator start `ACTIVE` on Professional, and existing organizations were grandfathered onto Professional.
 - Plan limits (`max_buildings`, `max_spaces`, `max_staff`, `null` = unlimited) are enforced when creating buildings, spaces, owners and staff roles. Tenants and vendors never use a seat. A blocked create returns **402** with an upgrade message.
+- Activating a customer (approving a trial's plan request, or setting a non-past-due subscription to `ACTIVE`) starts a new period today and immediately issues and emails its invoice. Organizations provisioned or grandfathered as `ACTIVE` have no invoice for their first period; bill it from **Administration → Billing → New invoice**.
 - The billing job (same cadence as other automations) issues a renewal invoice at the start of every paid period (due in 14 days, emailed to the billing contact or owners), marks unpaid invoices `OVERDUE` and moves the subscription to `PAST_DUE`. Recording payment of the last overdue invoice returns it to `ACTIVE`. Suspension is always a deliberate operator action.
 
 ## Organization endpoints

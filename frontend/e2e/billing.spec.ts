@@ -9,7 +9,7 @@ test("owner requests a plan, the operator approves and invoices, and the owner s
   await expect(
     page.getByRole("heading", { name: "Plan & billing" }),
   ).toBeVisible();
-  await expect(page.getByText("Professional").first()).toBeVisible();
+  await expect(page.getByText("Free trial").first()).toBeVisible();
   await page.getByRole("button", { name: /Annual/ }).click();
   await page.getByRole("button", { name: "Request Starter" }).click();
   await expect(page.getByText(/You requested Starter/)).toBeVisible();
@@ -22,14 +22,9 @@ test("owner requests a plan, the operator approves and invoices, and the owner s
   await row.getByRole("button", { name: "Approve" }).click();
   await expect(row.getByText("Starter")).toBeVisible();
 
+  // Approval invoices the first period straight away.
   await page.getByRole("tab", { name: "Invoices" }).click();
-  await page.getByRole("button", { name: "New invoice" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("combobox", { name: "Organization" }).click();
-  await page.getByRole("option", { name: "Harbor Holdings" }).click();
-  await dialog.getByRole("button", { name: "Create draft" }).click();
   const invoice = page.getByRole("row").filter({ hasText: "Harbor Holdings" });
-  await invoice.getByRole("button", { name: "Issue" }).click();
   await expect(invoice.getByText("Issued")).toBeVisible();
   await signOut(page);
 

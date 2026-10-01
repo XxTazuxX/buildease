@@ -183,4 +183,9 @@ public class PlatformBillingController {
 
   @PostMapping("/invoices/{invoice}/void")
   void voidInvoice(
-      @RequestAttribute Actor actor,
+      @RequestAttribute Actor actor,
+      @PathVariable UUID invoice,
+      @Valid @RequestBody(required = false) Voiding body) {
+    invoices.voidInvoice(actor, invoice, body == null ? null : body.reason());
+  }
+}

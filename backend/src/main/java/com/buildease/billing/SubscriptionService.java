@@ -419,4 +419,18 @@ public class SubscriptionService {
    */
   private void owner(Actor actor, UUID organization) {
     db.context(actor.id(), null, actor.impersonatedBy());
-    v
+    var membership =
+        db.find(
+            "select owner from memberships where organization_id=? and account_id=? and status='ACTIVE'",
+            organization,
+            actor.id());
+    boolean owner = actor.admin() || membership.map(m -> (boolean) m.get("owner")).orElse(false);
+    if (!owner) throw ApiException.forbidden();
+    db.context(actor.id(), organization, actor.impersonatedBy());
+    db.one("select id from organizations where id=?", organization);
+  }
+
+  private static String blank(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+}

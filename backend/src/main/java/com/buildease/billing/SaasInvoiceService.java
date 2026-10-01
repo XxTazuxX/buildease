@@ -288,21 +288,81 @@ public class SaasInvoiceService {
     try {
       db.update(
           "insert into saas_invoices(id,organization_id,number,plan_id,description,period_start,period_end,subtotal,tax,total,currency,status,issued_on,due_on,notes,created_by) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        id,
-        organization,
-        number,
-        plan,
-        description,
-        periodStart,
-        periodEnd,
-        subtotal,
-        tax,
-        subtotal.add(tax),
-        currency,
-        status,
-        issuedOn,
-        dueOn,
-        blank(notes),
-        actor);
+          id,
+          organization,
+          number,
+          plan,
+          description,
+          periodStart,
+          periodEnd,
+          subtotal,
+          tax,
+          subtotal.add(tax),
+          currency,
+          status,
+          issuedOn,
+          dueOn,
+          blank(notes),
+          actor);
     } catch (org.springframework.dao.DataIntegrityViolationException e) {
-      throw new ApiException(409, "This billing period has already been 
+      throw new ApiException(409, "This billing period has already been invoiced");
+    }
+    db.audit(actor, organization, "SAAS_INVOICE_CREATED", id);
+    return id;
+  }
+
+  /** Emails the billing contact (or every owner) that an invoice is ready. Best effort. */
+  void notifyIssued(UUID organization) {
+    var sub = subscriptions.current(organization);
+    List<String> recipients = new ArrayList<>();
+    if (sub.get("billing_email") != null) recipients.add((String) sub.get("billing_email"));
+    else
+      db.rows(
+              "select a.email from memberships m join accounts a on a.id=m.account_id where m.organization_id=? and m.owner and m.status='ACTIVE' and a.active",
+              organization)
+          .forEach(row -> recipients.add((String) row.get("email")));
+    for (String recipient : recipients) {
+      try {
+        mail.saasInvoiceIssued(recipient, organization.toString());
+      } catch (RuntimeException error) {
+        log.warn("Invoice email to organization {} was not delivered", organization);
+      }
+    }
+    db.rows(
+            "select account_id from memberships where organization_id=? and owner and status='ACTIVE'",
+            organization)
+        .forEach(
+            row ->
+                db.update(
+                    "insert into notifications(id,account_id,organization_id,type,title,target_path,deduplication_key) values (?,?,?,'BILLING_INVOICE','New subscription invoice','/billing',?) on conflict(account_id,deduplication_key) do nothing",
+                    UUID.randomUUID(),
+                    row.get("account_id"),
+                    organization,
+                    "billing:invoice:" + organization + ":" + LocalDate.now()));
+  }
+
+  private Map<String, Object> withBillTo(Map<String, Object> row, Map<String, Object> sub) {
+    var result = new LinkedHashMap<>(row);
+    Map<String, Object> billTo = new LinkedHashMap<>();
+    billTo.put("name", sub.get("billing_name"));
+    billTo.put("email", sub.get("billing_email"));
+    billTo.put("address", sub.get("billing_address"));
+    billTo.put("tax_id", sub.get("tax_id"));
+    result.put("bill_to", billTo);
+    return result;
+  }
+
+  private Map<String, Object> locked(UUID invoice) {
+    return db.one("select * from saas_invoices where id=? for update", invoice);
+  }
+
+  private static void requireStatus(Map<String, Object> row, Set<Status> allowed) {
+    Status current = Status.valueOf((String) row.get("status"));
+    if (!allowed.contains(current))
+      throw new ApiException(409, "Invoice is " + current + "; this action is not allowed");
+  }
+
+  private static String blank(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+}

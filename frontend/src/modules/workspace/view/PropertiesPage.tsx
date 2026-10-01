@@ -20,10 +20,13 @@ export function PropertiesPage({
   org,
   building,
   owner,
+  canManage = owner,
 }: {
   org: string;
   building: string;
   owner: boolean;
+  /** Owners and this building's property managers (backend `building:manage`). */
+  canManage?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const commands = useAdminCommands();
@@ -46,10 +49,10 @@ export function PropertiesPage({
           <BuildingConfigurationPanel
             org={org}
             building={building}
-            owner={owner}
+            owner={canManage}
           />
-          {owner && <ListingsPanel org={org} building={building} />}
-          {owner && <ProspectsPanel org={org} building={building} />}
+          {canManage && <ListingsPanel org={org} building={building} />}
+          {canManage && <ProspectsPanel org={org} building={building} />}
         </>
       ) : (
         <Paper sx={{ p: 5, textAlign: "center" }}>

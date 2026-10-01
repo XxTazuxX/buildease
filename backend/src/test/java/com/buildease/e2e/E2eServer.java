@@ -2,6 +2,7 @@ package com.buildease.e2e;
 
 import com.buildease.BuildEaseApplication;
 import com.buildease.auth.Actor;
+import com.buildease.billing.SubscriptionService;
 import com.buildease.building.BuildingService;
 import com.buildease.building.SpaceType;
 import com.buildease.common.Store;
@@ -96,8 +97,27 @@ public class E2eServer {
     tenants.createBuilding(actor, other, "South House", "SOUTH");
 
     // Billing workflow: a separate managed customer so specs do not depend on each other.
-    tenants.createOrganization(
-        actor, "Harbor Holdings", "billing-owner@example.test", "Harbor Owner", password);
+    UUID harbor =
+        (UUID)
+            tenants
+                .createOrganization(
+                    actor,
+                    "Harbor Holdings",
+                    "billing-owner@example.test",
+                    "Harbor Owner",
+                    password)
+                .get("id");
+    // Start it on the free trial, like a self-registered customer converting to a paid plan.
+    context
+        .getBean(SubscriptionService.class)
+        .assign(
+            actor,
+            harbor,
+            UUID.fromString("00000000-0000-4000-8000-000000000001"),
+            SubscriptionService.Status.TRIALING,
+            SubscriptionService.Cycle.MONTHLY,
+            java.time.LocalDate.now().plusDays(14),
+            null);
 
     // Maintenance workflow: a resident with a unit and a property manager to work the ticket.
     var buildings = context.getBean(BuildingService.class);

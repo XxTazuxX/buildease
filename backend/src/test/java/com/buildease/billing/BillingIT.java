@@ -161,11 +161,20 @@ class BillingIT {
         t.owner(), t.organization(), STARTER, SubscriptionService.Cycle.MONTHLY);
     assertThat(subscriptions.list(admin, null, true, 0))
         .anySatisfy(row -> assertThat(row).containsEntry("organization_id", t.organization()));
-    subscriptions.approveRequest(admin, t.organization());
+    invoices.approveRequest(admin, t.organization());
 
     var overview = subscriptions.overview(t.owner(), t.organization());
     assertThat(overview).containsEntry("status", "ACTIVE").containsEntry("plan_code", "STARTER");
     assertThat(overview.get("requested_plan_id")).isNull();
+    // The first period of a newly paying customer is invoiced at activation, not a month later.
+    var first = invoices.forOrganization(t.owner(), t.organization(), 0);
+    assertThat(first).hasSize(1);
+    assertThat(first.getFirst()).containsEntry("status", "ISSUED");
+    assertThat((BigDecimal) first.getFirst().get("total")).isEqualByComparingTo("49.00");
+    verify(mail).saasInvoiceIssued(anyString(), eq(t.organization().toString()));
+    assertThatThrownBy(
+            () -> invoices.create(admin, t.organization(), null, null, null, null, null, null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
     tenants.createBuilding(t.owner(), t.organization(), "One", "ONE");
   }
 

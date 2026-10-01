@@ -841,6 +841,7 @@ export default function App() {
                         org={activeOrg}
                         building={building}
                         owner={!!access?.owner}
+                        canManage={canManage}
                       />
                     )
                   }
