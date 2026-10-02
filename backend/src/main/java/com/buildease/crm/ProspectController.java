@@ -24,6 +24,12 @@ public class ProspectController {
       @Size(max = 40) String phone,
       @Size(max = 2000) String notes) {}
 
+  public record UpdateBody(
+      @NotBlank @Size(max = 160) String name,
+      @Email @Size(max = 254) String email,
+      @Size(max = 40) String phone,
+      @Size(max = 2000) String notes) {}
+
   public record StatusBody(@NotNull ProspectStatus status, @Size(max = 2000) String notes) {}
 
   public record LinkLeaseBody(@NotNull UUID leaseId) {}
@@ -66,6 +72,33 @@ public class ProspectController {
       @PathVariable UUID building,
       @PathVariable UUID prospect) {
     return service.detail(actor, organization, building, prospect);
+  }
+
+  @PatchMapping("/{prospect}")
+  void update(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID prospect,
+      @Valid @RequestBody UpdateBody body) {
+    service.update(
+        actor,
+        organization,
+        building,
+        prospect,
+        body.name(),
+        body.email(),
+        body.phone(),
+        body.notes());
+  }
+
+  @DeleteMapping("/{prospect}")
+  void delete(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID prospect) {
+    service.delete(actor, organization, building, prospect);
   }
 
   @PostMapping("/{prospect}/status")

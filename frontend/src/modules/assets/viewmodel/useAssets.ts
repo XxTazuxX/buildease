@@ -43,6 +43,7 @@ export function useAssets(org: string, building: string, status?: AssetStatus) {
     update: (id: string, body: NewAsset) =>
       run(() => assetsApi.update(org, building, id, assetSchema.parse(body))),
     loadDetail: (id: string) => assetsApi.detail(org, building, id),
+    remove: (id: string) => run(() => assetsApi.remove(org, building, id)),
     setStatus: (id: string, status: AssetStatus) =>
       run(() => assetsApi.setStatus(org, building, id, status)),
   };

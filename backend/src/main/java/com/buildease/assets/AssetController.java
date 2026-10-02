@@ -100,6 +100,15 @@ public class AssetController {
         body.notes());
   }
 
+  @DeleteMapping("/{asset}")
+  void delete(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID asset) {
+    service.delete(actor, organization, building, asset);
+  }
+
   @PostMapping("/{asset}/status")
   void status(
       @RequestAttribute Actor actor,

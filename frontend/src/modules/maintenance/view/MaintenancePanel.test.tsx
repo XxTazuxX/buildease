@@ -288,6 +288,146 @@ it("requires a reason to cancel a request", async () => {
   );
 });
 
+it("confirms before deleting a category and passes its id", async () => {
+  const vm = baseVm({ deleteCategory: vi.fn().mockResolvedValue(true) });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Categories" }));
+  await user.click(
+    screen.getByRole("button", { name: "Delete category Plumbing" }),
+  );
+  const confirm = await screen.findByRole("dialog");
+  expect(
+    within(confirm).getByText(/Permanently delete .*Plumbing/),
+  ).toBeVisible();
+  await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+  expect(vm.deleteCategory).not.toHaveBeenCalled();
+
+  await user.click(
+    screen.getByRole("button", { name: "Delete category Plumbing" }),
+  );
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete category",
+    }),
+  );
+  await waitFor(() => expect(vm.deleteCategory).toHaveBeenCalledWith("cat-1"));
+});
+
+it("shows why a category cannot be deleted and keeps the confirmation open", async () => {
+  const vm = baseVm({
+    deleteCategory: vi.fn().mockResolvedValue(false),
+    error: "Maintenance requests use this category, so it cannot be deleted",
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Categories" }));
+  await user.click(
+    screen.getByRole("button", { name: "Delete category Plumbing" }),
+  );
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete category",
+    }),
+  );
+  expect(
+    within(screen.getByRole("dialog")).getByText(
+      /Maintenance requests use this category/,
+    ),
+  ).toBeInTheDocument();
+});
+
+const vendorUuid = "44444444-4444-4444-8444-444444444444";
+const acme = {
+  id: "vendor-1",
+  name: "Acme Plumbing",
+  email: "acme@example.test",
+  phone: null,
+  active: true,
+  account_id: vendorUuid,
+};
+
+it("edits a vendor with its stored details and linked account", async () => {
+  const vm = baseVm({
+    vendors: { data: [acme] },
+    updateVendor: vi.fn().mockResolvedValue(true),
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Vendors" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Edit vendor Acme Plumbing" }),
+  );
+  expect(within(dialog).getByText("Edit vendor")).toBeInTheDocument();
+  expect(within(dialog).getByLabelText("Vendor name")).toHaveValue(
+    "Acme Plumbing",
+  );
+  expect(within(dialog).getByLabelText("Email (optional)")).toHaveValue(
+    "acme@example.test",
+  );
+  expect(
+    within(dialog).getByLabelText("Link to account ID (optional)"),
+  ).toHaveValue(vendorUuid);
+
+  const name = within(dialog).getByLabelText("Vendor name");
+  await user.clear(name);
+  await user.type(name, "Acme & Sons");
+  await user.click(within(dialog).getByRole("button", { name: "Save vendor" }));
+  await waitFor(() => expect(vm.updateVendor).toHaveBeenCalledTimes(1));
+  expect(vm.updateVendor).toHaveBeenCalledWith("vendor-1", {
+    name: "Acme & Sons",
+    email: "acme@example.test",
+    phone: undefined,
+    accountId: vendorUuid,
+  });
+});
+
+it("returns the vendor form to add mode when an edit is cancelled", async () => {
+  const vm = baseVm({ vendors: { data: [acme] }, updateVendor: vi.fn() });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Vendors" }));
+  const dialog = screen.getByRole("dialog");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Edit vendor Acme Plumbing" }),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Cancel edit" }));
+  expect(within(dialog).getByText("Add a vendor")).toBeInTheDocument();
+  expect(within(dialog).getByLabelText("Vendor name")).toHaveValue("");
+  expect(vm.updateVendor).not.toHaveBeenCalled();
+});
+
+it("confirms before deleting a vendor and shows the server's refusal", async () => {
+  const vm = baseVm({
+    vendors: { data: [acme] },
+    deleteVendor: vi.fn().mockResolvedValue(false),
+    error: "Work orders were assigned to this vendor, so it cannot be deleted",
+  });
+  vi.mocked(useMaintenance).mockReturnValue(vm);
+  render(<MaintenancePanel org="org" building="building" canManage={true} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Vendors" }));
+  await user.click(
+    screen.getByRole("button", { name: "Delete vendor Acme Plumbing" }),
+  );
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete vendor",
+    }),
+  );
+  await waitFor(() => expect(vm.deleteVendor).toHaveBeenCalledWith("vendor-1"));
+  expect(
+    within(screen.getByRole("dialog")).getByText(
+      /Work orders were assigned to this vendor/,
+    ),
+  ).toBeInTheDocument();
+});
+
 it("cancels an in-progress edit without calling updateCategory", async () => {
   const vm = baseVm();
   vi.mocked(useMaintenance).mockReturnValue(vm);

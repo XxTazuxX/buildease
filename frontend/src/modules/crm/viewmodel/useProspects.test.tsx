@@ -15,6 +15,8 @@ vi.mock("../model/prospects", async (importOriginal) => {
       detail: vi.fn(),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       linkLease: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn(),
+      remove: vi.fn(),
     },
   };
 });
@@ -60,6 +62,69 @@ it("creates a valid prospect and invalidates the list", async () => {
   expect(invalidate).toHaveBeenCalledWith({
     queryKey: ["org", "building", "building", "prospects"],
   });
+});
+
+it("edits a prospect without its space and refreshes the list", async () => {
+  vi.mocked(prospectsApi.update).mockResolvedValue(undefined);
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useProspects("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.update("prospect-1", {
+      ...validProspect,
+      name: "  Jane Q. Prospect ",
+    });
+  });
+  expect(prospectsApi.update).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "prospect-1",
+    { name: "Jane Q. Prospect" },
+  );
+  expect(invalidate).toHaveBeenCalled();
+});
+
+it("rejects an invalid edit before calling the API", async () => {
+  const { result } = renderHook(() => useProspects("org", "building"), {
+    wrapper,
+  });
+  let ok: boolean | undefined;
+  await act(async () => {
+    ok = await result.current.update("prospect-1", {
+      ...validProspect,
+      name: "",
+    });
+  });
+  expect(ok).toBe(false);
+  expect(prospectsApi.update).not.toHaveBeenCalled();
+});
+
+it("deletes a prospect, refreshing the list, and reports a refusal", async () => {
+  vi.mocked(prospectsApi.remove).mockResolvedValueOnce(undefined);
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useProspects("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    expect(await result.current.remove("prospect-1")).toBe(true);
+  });
+  expect(prospectsApi.remove).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "prospect-1",
+  );
+  expect(invalidate).toHaveBeenCalled();
+
+  vi.mocked(prospectsApi.remove).mockRejectedValueOnce(
+    new Error("Screening records exist for this prospect"),
+  );
+  await act(async () => {
+    expect(await result.current.remove("prospect-2")).toBe(false);
+  });
+  expect(result.current.error).toBe(
+    "Screening records exist for this prospect",
+  );
 });
 
 it("updates status and links a lease through the right endpoints", async () => {

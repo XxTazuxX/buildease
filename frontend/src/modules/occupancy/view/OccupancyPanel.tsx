@@ -21,6 +21,7 @@ import {
   assignmentFormSchema,
   residentFormSchema,
   residentUpdateFormSchema,
+  type HouseholdMember,
   type Resident,
 } from "../model/occupancy";
 import { useOccupancy } from "../viewmodel/useOccupancy";
@@ -102,6 +103,14 @@ export function OccupancyPanel({
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [editing, setEditing] = useState<Resident | null>(null);
   const [householdFor, setHouseholdFor] = useState<Resident | null>(null);
+  const [editingMember, setEditingMember] = useState<{
+    resident: Resident;
+    member: HouseholdMember;
+  } | null>(null);
+  const [removingMember, setRemovingMember] = useState<{
+    resident: Resident;
+    member: HouseholdMember;
+  } | null>(null);
   const resident = useZodForm(residentFormSchema, emptyResident);
   const assignment = useZodForm(assignmentFormSchema, emptyAssignment);
   const error =
@@ -195,16 +204,45 @@ export function OccupancyPanel({
                   ))}
                 </Stack>
                 {(item.household?.length ?? 0) > 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Household:{" "}
-                    {item.household
-                      ?.map((member) =>
-                        member.relationship
-                          ? `${member.name} (${member.relationship})`
-                          : member.name,
-                      )
-                      .join(", ")}
-                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Household
+                    </Typography>
+                    {item.household?.map((member) => (
+                      <Stack
+                        key={member.id}
+                        direction="row"
+                        sx={{ alignItems: "center", gap: 1 }}
+                      >
+                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                          {member.relationship
+                            ? `${member.name} (${member.relationship})`
+                            : member.name}
+                        </Typography>
+                        <Button
+                          size="small"
+                          disabled={vm.busy}
+                          aria-label={`Edit household member ${member.name}`}
+                          onClick={() =>
+                            setEditingMember({ resident: item, member })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          disabled={vm.busy}
+                          aria-label={`Remove household member ${member.name}`}
+                          onClick={() =>
+                            setRemovingMember({ resident: item, member })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </Stack>
+                    ))}
+                  </Box>
                 )}
               </Box>
               <Button
@@ -301,6 +339,83 @@ export function OccupancyPanel({
               setHouseholdFor(null);
           }}
         />
+      )}
+      {editingMember && (
+        <PromptDialog
+          title={`Edit household member · ${editingMember.resident.display_name}`}
+          fields={[
+            {
+              name: "name",
+              label: "Household member name",
+              max: 120,
+              defaultValue: editingMember.member.name,
+            },
+            {
+              name: "relationship",
+              label: "Relationship (optional)",
+              max: 60,
+              optional: true,
+              defaultValue: editingMember.member.relationship ?? "",
+            },
+          ]}
+          label="Save household member"
+          error={vm.error}
+          onClose={() => setEditingMember(null)}
+          onSubmit={async (values) => {
+            if (
+              await vm.updateHouseholdMember(
+                editingMember.resident.id,
+                editingMember.member.id,
+                values.name,
+                values.relationship,
+              )
+            )
+              setEditingMember(null);
+          }}
+        />
+      )}
+      {removingMember && (
+        <AdaptiveDialog
+          open
+          onClose={() => setRemovingMember(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Remove household member</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Remove &ldquo;{removingMember.member.name}&rdquo; from{" "}
+                {removingMember.resident.display_name}&apos;s household? This
+                cannot be undone.
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setRemovingMember(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    if (
+                      await vm.removeHouseholdMember(
+                        removingMember.resident.id,
+                        removingMember.member.id,
+                      )
+                    )
+                      setRemovingMember(null);
+                  }}
+                >
+                  Remove member
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
       )}
       <AdaptiveDialog
         open={assignmentOpen}

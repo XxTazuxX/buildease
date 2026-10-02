@@ -273,4 +273,72 @@ class AssetIT {
                     tenant, s.organization(), s.building(), asset, new BigDecimal("10"), "hours"))
         .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
+
+  private UUID newAsset(Setup s) {
+    return assets.create(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.space(),
+        "Rooftop HVAC Unit",
+        AssetCategory.HVAC,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  @Test
+  void anAssetWithoutMeterReadingsCanBeDeleted() {
+    Setup s = organizationWithSpace();
+    UUID asset = newAsset(s);
+
+    assets.delete(s.owner(), s.organization(), s.building(), asset);
+
+    assertThatThrownBy(() -> assets.detail(s.owner(), s.organization(), s.building(), asset))
+        .isInstanceOf(ApiException.class);
+    assertThat(
+            assets.list(s.owner(), s.organization(), s.building(), null, null, 0).stream()
+                .map(row -> row.get("id")))
+        .doesNotContain(asset);
+  }
+
+  @Test
+  void anAssetWithMeterReadingsCannotBeDeletedButCanBeRetired() {
+    Setup s = organizationWithSpace();
+    UUID asset = newAsset(s);
+    assets.recordMeterReading(
+        s.owner(), s.organization(), s.building(), asset, new BigDecimal("10.00"), "hours");
+
+    assertThatThrownBy(() -> assets.delete(s.owner(), s.organization(), s.building(), asset))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    assertThat(assets.detail(s.owner(), s.organization(), s.building(), asset))
+        .containsEntry("name", "Rooftop HVAC Unit");
+
+    assets.setStatus(s.owner(), s.organization(), s.building(), asset, AssetStatus.RETIRED);
+    assertThat(assets.detail(s.owner(), s.organization(), s.building(), asset))
+        .containsEntry("status", "RETIRED");
+  }
+
+  @Test
+  void nonManagerCannotDeleteAnAsset() {
+    Setup s = organizationWithSpace();
+    UUID asset = newAsset(s);
+    String tenantEmail = "tenant-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        s.owner(),
+        s.organization(),
+        tenantEmail,
+        "Tenant",
+        password,
+        false,
+        s.building(),
+        Set.of(Role.TENANT));
+    Actor tenant = actor(tenantEmail);
+
+    assertThatThrownBy(() -> assets.delete(tenant, s.organization(), s.building(), asset))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+  }
 }

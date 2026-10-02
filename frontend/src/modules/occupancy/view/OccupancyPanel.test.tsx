@@ -52,6 +52,105 @@ const members = [
 const setup = () =>
   render(<OccupancyPanel org="o" building="b" members={members} />);
 
+function withHousehold(overrides: Record<string, unknown> = {}) {
+  const updateHouseholdMember = vi.fn().mockResolvedValue(true);
+  const removeHouseholdMember = vi.fn().mockResolvedValue(true);
+  const vm = {
+    ...vi.mocked(useOccupancy)("o", "b"),
+    residents: {
+      data: [
+        {
+          ...resident,
+          household: [
+            { id: "m1", name: "Kim", relationship: "Partner" },
+            { id: "m2", name: "Sam Jr", relationship: null },
+          ],
+        },
+      ],
+      error: null,
+    },
+    updateHouseholdMember,
+    removeHouseholdMember,
+    ...overrides,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(useOccupancy).mockReturnValue(vm as any);
+  return vm;
+}
+
+it("lists each household member with Edit and Remove actions", () => {
+  withHousehold();
+  setup();
+  expect(screen.getByText("Kim (Partner)")).toBeInTheDocument();
+  expect(screen.getByText("Sam Jr")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Edit household member Kim" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Remove household member Sam Jr" }),
+  ).toBeInTheDocument();
+});
+
+it("edits a household member from a prefilled, validated dialog", async () => {
+  const vm = withHousehold();
+  setup();
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: "Edit household member Kim" }),
+  );
+  const dialog = await screen.findByRole("dialog");
+  const name = within(dialog).getByLabelText("Household member name");
+  expect(name).toHaveValue("Kim");
+  expect(within(dialog).getByLabelText("Relationship (optional)")).toHaveValue(
+    "Partner",
+  );
+
+  await user.clear(name);
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save household member" }),
+  );
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(vm.updateHouseholdMember).not.toHaveBeenCalled();
+
+  await user.type(name, "Kim Lee");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save household member" }),
+  );
+  await waitFor(() =>
+    expect(vm.updateHouseholdMember).toHaveBeenCalledWith(
+      "r1",
+      "m1",
+      "Kim Lee",
+      "Partner",
+    ),
+  );
+});
+
+it("confirms before removing a household member", async () => {
+  const vm = withHousehold();
+  setup();
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: "Remove household member Kim" }),
+  );
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText(/Remove .*Kim.* household/)).toBeVisible();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(vm.removeHouseholdMember).not.toHaveBeenCalled();
+
+  await user.click(
+    screen.getByRole("button", { name: "Remove household member Kim" }),
+  );
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Remove member",
+    }),
+  );
+  await waitFor(() =>
+    expect(vm.removeHouseholdMember).toHaveBeenCalledWith("r1", "m1"),
+  );
+});
+
 it("blocks creating a resident without an account and a name", async () => {
   setup();
   const user = userEvent.setup();

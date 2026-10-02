@@ -169,6 +169,7 @@ export interface Vendor {
   email: string | null;
   phone: string | null;
   active: boolean;
+  account_id?: string | null;
 }
 export interface MaintenanceRequestDetail extends MaintenanceRequest {
   description: string;
@@ -224,6 +225,8 @@ export const maintenanceApi = {
     category: string,
     body: { name: string; responseHours: number; resolutionHours: number },
   ) => api(`${base(org, building)}/categories/${category}`, "PATCH", body),
+  deleteCategory: (org: string, building: string, category: string) =>
+    api(`${base(org, building)}/categories/${category}`, "DELETE"),
   requests: (org: string, building: string, page = 0) =>
     api<MaintenanceRequest[]>(`${base(org, building)}/requests?page=${page}`),
   cancel: (org: string, building: string, request: string, reason: string) =>
@@ -238,6 +241,14 @@ export const maintenanceApi = {
     body: NewRecurringPlan,
   ) =>
     api<{ id: string }>(`${base(org, building)}/recurring-plans`, "POST", body),
+  updateRecurringPlan: (
+    org: string,
+    building: string,
+    plan: string,
+    body: NewRecurringPlan,
+  ) => api(`${base(org, building)}/recurring-plans/${plan}`, "PATCH", body),
+  deleteRecurringPlan: (org: string, building: string, plan: string) =>
+    api(`${base(org, building)}/recurring-plans/${plan}`, "DELETE"),
   detail: (org: string, building: string, request: string) =>
     api<MaintenanceRequestDetail>(`${base(org, building)}/requests/${request}`),
   submit: (org: string, building: string, body: NewMaintenanceRequest) =>
@@ -302,6 +313,14 @@ export const maintenanceApi = {
     building: string,
     body: { name: string; email?: string; phone?: string; accountId?: string },
   ) => api<{ id: string }>(`${base(org, building)}/vendors`, "POST", body),
+  updateVendor: (
+    org: string,
+    building: string,
+    vendor: string,
+    body: { name: string; email?: string; phone?: string; accountId?: string },
+  ) => api(`${base(org, building)}/vendors/${vendor}`, "PATCH", body),
+  deleteVendor: (org: string, building: string, vendor: string) =>
+    api(`${base(org, building)}/vendors/${vendor}`, "DELETE"),
   assignStaff: (
     org: string,
     building: string,

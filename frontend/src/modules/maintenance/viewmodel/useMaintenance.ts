@@ -168,6 +168,19 @@ export function useMaintenance(org: string, building: string) {
       phone?: string;
       accountId?: string;
     }) => run(() => maintenanceApi.createVendor(org, building, body)),
+    updateVendor: (
+      vendor: string,
+      body: {
+        name: string;
+        email?: string;
+        phone?: string;
+        accountId?: string;
+      },
+    ) => run(() => maintenanceApi.updateVendor(org, building, vendor, body)),
+    deleteVendor: (vendor: string) =>
+      run(() => maintenanceApi.deleteVendor(org, building, vendor)),
+    deleteCategory: (category: string) =>
+      run(() => maintenanceApi.deleteCategory(org, building, category)),
   };
 }
 
@@ -279,15 +292,11 @@ export function useRecurringPlans(org: string, building: string) {
     queryFn: () => maintenanceApi.recurringPlans(org, building),
     enabled: !!building,
   });
-  const create = async (body: NewRecurringPlan) => {
+  const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
-      await maintenanceApi.createRecurringPlan(
-        org,
-        building,
-        recurringPlanSchema.parse(body),
-      );
+      await fn();
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
@@ -297,5 +306,24 @@ export function useRecurringPlans(org: string, building: string) {
       setBusy(false);
     }
   };
-  return { plans, busy, error, create };
+  const create = (body: NewRecurringPlan) =>
+    run(() =>
+      maintenanceApi.createRecurringPlan(
+        org,
+        building,
+        recurringPlanSchema.parse(body),
+      ),
+    );
+  const update = (plan: string, body: NewRecurringPlan) =>
+    run(() =>
+      maintenanceApi.updateRecurringPlan(
+        org,
+        building,
+        plan,
+        recurringPlanSchema.parse(body),
+      ),
+    );
+  const remove = (plan: string) =>
+    run(() => maintenanceApi.deleteRecurringPlan(org, building, plan));
+  return { plans, busy, error, create, update, remove };
 }

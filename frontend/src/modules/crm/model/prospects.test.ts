@@ -4,7 +4,27 @@ import {
   linkableLeases,
   linkLeaseSchema,
   newProspectSchema,
+  updateProspectSchema,
 } from "./prospects";
+
+describe("updateProspectSchema", () => {
+  const body = { name: " Jane ", email: "", phone: "", notes: "" };
+  it("keeps the contact rules but drops the space", () => {
+    expect(updateProspectSchema.parse({ ...body, spaceId: "ignored" })).toEqual(
+      { name: "Jane", email: "", phone: "", notes: "" },
+    );
+    expect(updateProspectSchema.safeParse({ ...body, name: "" }).success).toBe(
+      false,
+    );
+    expect(
+      updateProspectSchema.safeParse({ ...body, email: "nope" }).success,
+    ).toBe(false);
+    expect(
+      updateProspectSchema.safeParse({ ...body, phone: "1".repeat(41) })
+        .success,
+    ).toBe(false);
+  });
+});
 
 describe("newProspectSchema backend limits", () => {
   const valid = {

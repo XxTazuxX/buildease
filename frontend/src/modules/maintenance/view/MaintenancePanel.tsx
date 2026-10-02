@@ -127,6 +127,12 @@ export function MaintenancePanel({
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [resolving, setResolving] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [editingVendor, setEditingVendor] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{
+    kind: "category" | "vendor";
+    id: string;
+    name: string;
+  } | null>(null);
   const newVendor = useZodForm(vendorFormSchema, emptyVendor);
   const category = useZodForm(categoryFormSchema, emptyCategory);
   const resetCategoryForm = () => {
@@ -391,23 +397,40 @@ export function MaintenancePanel({
                           default priority {item.default_priority}
                         </Typography>
                       </Box>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setEditingCategory(item.id);
-                          category.reset({
-                            name: item.name,
-                            responseHours: String(
-                              Math.round(item.response_minutes / 60),
-                            ),
-                            resolutionHours: String(
-                              Math.round(item.resolution_minutes / 60),
-                            ),
-                          });
-                        }}
-                      >
-                        Edit
-                      </Button>
+                      <Stack direction="row" spacing={0.5}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditingCategory(item.id);
+                            category.reset({
+                              name: item.name,
+                              responseHours: String(
+                                Math.round(item.response_minutes / 60),
+                              ),
+                              resolutionHours: String(
+                                Math.round(item.resolution_minutes / 60),
+                              ),
+                            });
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          disabled={vm.busy}
+                          aria-label={`Delete category ${item.name}`}
+                          onClick={() =>
+                            setDeleting({
+                              kind: "category",
+                              id: item.id,
+                              name: item.name,
+                            })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </Stack>
                     </Stack>
                   </Paper>
                 ))}
@@ -525,16 +548,64 @@ export function MaintenancePanel({
             <Stack spacing={1}>
               {vm.vendors.data?.map((item) => (
                 <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {[item.email, item.phone].filter(Boolean).join(" · ") ||
-                      "No contact details"}
-                  </Typography>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      gap: 1.5,
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Box>
+                      <Typography sx={{ fontWeight: 700 }}>
+                        {item.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {[item.email, item.phone].filter(Boolean).join(" · ") ||
+                          "No contact details"}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.5}>
+                      <Button
+                        size="small"
+                        disabled={vm.busy}
+                        aria-label={`Edit vendor ${item.name}`}
+                        onClick={() => {
+                          setEditingVendor(item.id);
+                          newVendor.reset({
+                            name: item.name,
+                            email: item.email ?? "",
+                            phone: item.phone ?? "",
+                            accountId: item.account_id ?? "",
+                          });
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        disabled={vm.busy}
+                        aria-label={`Delete vendor ${item.name}`}
+                        onClick={() =>
+                          setDeleting({
+                            kind: "vendor",
+                            id: item.id,
+                            name: item.name,
+                          })
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
             <Divider />
-            <Typography variant="subtitle2">Add a vendor</Typography>
+            <Typography variant="subtitle2">
+              {editingVendor ? "Edit vendor" : "Add a vendor"}
+            </Typography>
             <TextField label="Vendor name" {...newVendor.field("name")} />
             <TextField label="Email (optional)" {...newVendor.field("email")} />
             <TextField label="Phone (optional)" {...newVendor.field("phone")} />
@@ -546,24 +617,86 @@ export function MaintenancePanel({
                 "The account must already have the Vendor role in this building"
               }
             />
-            <Button
-              variant="contained"
-              disabled={vm.busy}
-              onClick={newVendor.submit(async (values) => {
-                const ok = await vm.createVendor({
-                  name: values.name,
-                  email: values.email || undefined,
-                  phone: values.phone || undefined,
-                  accountId: values.accountId || undefined,
-                });
-                if (ok) newVendor.reset(emptyVendor);
-              })}
-            >
-              Add vendor
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                disabled={vm.busy}
+                onClick={newVendor.submit(async (values) => {
+                  const body = {
+                    name: values.name,
+                    email: values.email || undefined,
+                    phone: values.phone || undefined,
+                    accountId: values.accountId || undefined,
+                  };
+                  const ok = await (editingVendor
+                    ? vm.updateVendor(editingVendor, body)
+                    : vm.createVendor(body));
+                  if (ok) {
+                    setEditingVendor(null);
+                    newVendor.reset(emptyVendor);
+                  }
+                })}
+              >
+                {editingVendor ? "Save vendor" : "Add vendor"}
+              </Button>
+              {editingVendor && (
+                <Button
+                  onClick={() => {
+                    setEditingVendor(null);
+                    newVendor.reset(emptyVendor);
+                  }}
+                >
+                  Cancel edit
+                </Button>
+              )}
+            </Stack>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>
+
+      {deleting && (
+        <AdaptiveDialog
+          open
+          onClose={() => setDeleting(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Delete {deleting.kind}</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+                undone.{" "}
+                {deleting.kind === "category"
+                  ? "A category that has requests or recurring plans can't be deleted; rename it instead."
+                  : "A vendor that has been assigned work can't be deleted."}
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setDeleting(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    const ok = await (deleting.kind === "category"
+                      ? vm.deleteCategory(deleting.id)
+                      : vm.deleteVendor(deleting.id));
+                    if (ok) setDeleting(null);
+                  }}
+                >
+                  Delete {deleting.kind}
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
     </Paper>
   );
 }

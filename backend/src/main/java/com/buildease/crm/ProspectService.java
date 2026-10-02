@@ -78,6 +78,50 @@ public class ProspectService {
     return id;
   }
 
+  public void update(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID prospect,
+      String name,
+      String email,
+      String phone,
+      String notes) {
+    manager(actor, organization, building);
+    lockedProspect(organization, building, prospect);
+    db.update(
+        "update prospects set name=?,email=?,phone=?,notes=?,updated_at=now() where id=?",
+        name.trim(),
+        trim(email),
+        trim(phone),
+        trim(notes),
+        prospect);
+    db.audit(actor.id(), organization, "PROSPECT_UPDATED", prospect);
+  }
+
+  public void delete(Actor actor, UUID organization, UUID building, UUID prospect) {
+    manager(actor, organization, building);
+    var row = lockedProspect(organization, building, prospect);
+    if (ProspectStatus.valueOf((String) row.get("status")) == ProspectStatus.LEASED)
+      throw new ApiException(
+          409, "A leased prospect is part of the lease history and cannot be deleted");
+    if (db.find(
+            "select 1 from screenings where organization_id=? and building_id=? and prospect_id=? limit 1",
+            organization,
+            building,
+            prospect)
+        .isPresent())
+      throw new ApiException(
+          409,
+          "Screening records exist for this prospect, so it cannot be deleted. Withdraw it instead");
+    db.update(
+        "delete from prospects where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        prospect);
+    db.audit(actor.id(), organization, "PROSPECT_DELETED", prospect);
+  }
+
   public void updateStatus(
       Actor actor,
       UUID organization,

@@ -75,6 +75,28 @@ export const occupancyApi = {
       "POST",
       body,
     ),
+  updateHouseholdMember: (
+    org: string,
+    building: string,
+    resident: string,
+    member: string,
+    body: { name: string; relationship?: string },
+  ) =>
+    api(
+      `${base(org, building)}/residents/${resident}/household-members/${member}`,
+      "PATCH",
+      body,
+    ),
+  removeHouseholdMember: (
+    org: string,
+    building: string,
+    resident: string,
+    member: string,
+  ) =>
+    api(
+      `${base(org, building)}/residents/${resident}/household-members/${member}`,
+      "DELETE",
+    ),
   end: (org: string, building: string, assignment: string, endsOn: string) =>
     api(`${base(org, building)}/space-assignments/${assignment}/end`, "POST", {
       endsOn,

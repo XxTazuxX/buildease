@@ -95,6 +95,8 @@ export const assetsApi = {
     api(`${base(org, building)}/${id}`, "PATCH", assetBody(body)),
   detail: (org: string, building: string, id: string) =>
     api<AssetDetail>(`${base(org, building)}/${id}`),
+  remove: (org: string, building: string, id: string) =>
+    api(`${base(org, building)}/${id}`, "DELETE"),
   setStatus: (org: string, building: string, id: string, status: AssetStatus) =>
     api(`${base(org, building)}/${id}/status`, "POST", { status }),
   recordMeterReading: (

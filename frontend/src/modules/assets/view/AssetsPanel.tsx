@@ -52,6 +52,10 @@ export function AssetsPanel({
   const form = useZodForm(assetSchema, emptyAsset);
   const [viewing, setViewing] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [loadError, setLoadError] = useState("");
   const startEdit = async (id: string) => {
     setLoadError("");
@@ -157,6 +161,13 @@ export function AssetsPanel({
                   Reactivate
                 </Button>
               )}
+              <Button
+                color="error"
+                disabled={vm.busy}
+                onClick={() => setDeleting({ id: item.id, name: item.name })}
+              >
+                Delete
+              </Button>
             </Stack>
           </Paper>
         ))}
@@ -239,6 +250,45 @@ export function AssetsPanel({
           </Stack>
         </DialogContent>
       </AdaptiveDialog>
+
+      {deleting && (
+        <AdaptiveDialog
+          open
+          onClose={() => setDeleting(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Delete asset</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+                undone. An asset with meter readings can&apos;t be deleted;
+                retire it instead.
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setDeleting(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    if (await vm.remove(deleting.id)) setDeleting(null);
+                  }}
+                >
+                  Delete asset
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
 
       {viewing && (
         <AssetDetailDialog

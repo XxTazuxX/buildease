@@ -96,6 +96,26 @@ public class BuildingController {
             actor, organization, building, body.name(), body.code(), body.sortOrder()));
   }
 
+  @PatchMapping("/levels/{level}")
+  void updateLevel(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID level,
+      @Valid @RequestBody Level body) {
+    service.updateLevel(
+        actor, organization, building, level, body.name(), body.code(), body.sortOrder());
+  }
+
+  @DeleteMapping("/levels/{level}")
+  void deleteLevel(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID level) {
+    service.deleteLevel(actor, organization, building, level);
+  }
+
   @GetMapping("/spaces")
   Object spaces(
       @RequestAttribute Actor actor, @PathVariable UUID organization, @PathVariable UUID building) {
@@ -123,6 +143,38 @@ public class BuildingController {
             body.area(),
             body.capacity(),
             body.notes()));
+  }
+
+  @PatchMapping("/spaces/{space}")
+  void updateSpace(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID space,
+      @Valid @RequestBody Space body) {
+    service.updateSpace(
+        actor,
+        organization,
+        building,
+        space,
+        body.levelId(),
+        body.parentSpaceId(),
+        body.name(),
+        body.code(),
+        body.type(),
+        body.rentable(),
+        body.area(),
+        body.capacity(),
+        body.notes());
+  }
+
+  @DeleteMapping("/spaces/{space}")
+  void deleteSpace(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID space) {
+    service.deleteSpace(actor, organization, building, space);
   }
 
   @PostMapping("/spaces/{space}/status")

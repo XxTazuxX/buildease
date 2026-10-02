@@ -101,12 +101,39 @@ export function ProspectsPanel({
   const spaces = useProspectSpaces(org, building);
   const leases = useProspectLeases(org, building);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [loadError, setLoadError] = useState("");
   const form = useZodForm(newProspectSchema, emptyProspect);
   const [screeningProspect, setScreeningProspect] = useState<{
     id: string;
     name: string;
   } | null>(null);
-  const error = vm.error || vm.list.error?.message || leases.error?.message;
+  const error =
+    vm.error || loadError || vm.list.error?.message || leases.error?.message;
+
+  const startEdit = async (id: string) => {
+    setLoadError("");
+    try {
+      const detail = await vm.loadDetail(id);
+      form.reset({
+        spaceId: detail.space_id,
+        name: detail.name,
+        email: detail.email ?? "",
+        phone: detail.phone ?? "",
+        notes: detail.notes ?? "",
+      });
+      setEditing(id);
+      setCreateOpen(true);
+    } catch (cause) {
+      setLoadError(
+        cause instanceof Error ? cause.message : "Could not load prospect",
+      );
+    }
+  };
 
   const spaceName = (id: string) =>
     spaces.data?.find((item) => item.id === id)?.name ?? "Space";
@@ -134,6 +161,8 @@ export function ProspectsPanel({
           variant="contained"
           onClick={() => {
             form.reset(emptyProspect);
+            setEditing(null);
+            setLoadError("");
             setCreateOpen(true);
           }}
         >
@@ -216,6 +245,23 @@ export function ProspectsPanel({
                     Screening
                   </Button>
                 )}
+                <Button
+                  disabled={vm.busy}
+                  onClick={() => void startEdit(item.id)}
+                >
+                  Edit
+                </Button>
+                {item.status !== "LEASED" && (
+                  <Button
+                    color="error"
+                    disabled={vm.busy}
+                    onClick={() =>
+                      setDeleting({ id: item.id, name: item.name })
+                    }
+                  >
+                    Delete
+                  </Button>
+                )}
                 {item.status === "APPROVED" && (
                   <LinkLeaseForm
                     leases={linkableLeases(
@@ -242,13 +288,21 @@ export function ProspectsPanel({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>New prospect</DialogTitle>
+        <DialogTitle>{editing ? "Edit prospect" : "New prospect"}</DialogTitle>
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField select label="Space" {...form.field("spaceId")}>
+            <TextField
+              select
+              label="Space"
+              disabled={!!editing}
+              {...form.field("spaceId")}
+            >
               {spaces.data
-                ?.filter((item) => ["VACANT", "RESERVED"].includes(item.status))
+                ?.filter(
+                  (item) =>
+                    !!editing || ["VACANT", "RESERVED"].includes(item.status),
+                )
                 .map((item) => (
                   <MenuItem key={item.id} value={item.id}>
                     {item.name} · {item.code}
@@ -268,14 +322,56 @@ export function ProspectsPanel({
               variant="contained"
               disabled={vm.busy}
               onClick={form.submit(async (values) => {
-                if (await vm.create(values)) setCreateOpen(false);
+                const ok = await (editing
+                  ? vm.update(editing, values)
+                  : vm.create(values));
+                if (ok) setCreateOpen(false);
               })}
             >
-              Add prospect
+              {editing ? "Save changes" : "Add prospect"}
             </Button>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>
+
+      {deleting && (
+        <AdaptiveDialog
+          open
+          onClose={() => setDeleting(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Delete prospect</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+                undone. A prospect that was screened can&apos;t be deleted;
+                withdraw it instead.
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setDeleting(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    if (await vm.remove(deleting.id)) setDeleting(null);
+                  }}
+                >
+                  Delete prospect
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
 
       {screeningProspect && (
         <ScreeningDialog

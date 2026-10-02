@@ -190,6 +190,142 @@ it("blocks a new prospect without a space or name and flags a bad email", async 
   expect(create).not.toHaveBeenCalled();
 });
 
+const withVm = (overrides: Record<string, unknown>) =>
+  vi.mocked(useProspects).mockReturnValue({
+    ...vi.mocked(useProspects)("org", "building"),
+    ...overrides,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+
+const spaceUuid = "33333333-3333-4333-8333-333333333333";
+const useUuidSpace = () =>
+  vi.mocked(useProspectSpaces).mockReturnValue({
+    data: [{ id: spaceUuid, name: "Flat 1", code: "F1", status: "VACANT" }],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+
+const storedDetail = {
+  id: "prospect-1",
+  space_id: spaceUuid,
+  name: "Jane Prospect",
+  email: "jane@example.test",
+  phone: "555-0100",
+  notes: "Called twice",
+};
+
+it("opens Edit with the stored details, locks the space and saves changes", async () => {
+  useUuidSpace();
+  const update = vi.fn().mockResolvedValue(true);
+  withVm({ loadDetail: vi.fn().mockResolvedValue(storedDetail), update });
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText("Edit prospect")).toBeInTheDocument();
+  expect(within(dialog).getByLabelText("Name")).toHaveValue("Jane Prospect");
+  expect(within(dialog).getByLabelText("Email (optional)")).toHaveValue(
+    "jane@example.test",
+  );
+  expect(within(dialog).getByLabelText("Notes (optional)")).toHaveValue(
+    "Called twice",
+  );
+  expect(within(dialog).getByLabelText("Space")).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
+
+  const phone = within(dialog).getByLabelText("Phone (optional)");
+  await user.clear(phone);
+  await user.type(phone, "555-0199");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save changes" }),
+  );
+  await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  expect(update).toHaveBeenCalledWith(
+    "prospect-1",
+    expect.objectContaining({ name: "Jane Prospect", phone: "555-0199" }),
+  );
+});
+
+it("validates an edit before saving it", async () => {
+  useUuidSpace();
+  const update = vi.fn().mockResolvedValue(true);
+  withVm({ loadDetail: vi.fn().mockResolvedValue(storedDetail), update });
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.clear(within(dialog).getByLabelText("Name"));
+  const email = within(dialog).getByLabelText("Email (optional)");
+  await user.clear(email);
+  await user.type(email, "nope");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Save changes" }),
+  );
+  expect(await within(dialog).findByText("Required")).toBeInTheDocument();
+  expect(
+    within(dialog).getByText("Enter a valid email address"),
+  ).toBeInTheDocument();
+  expect(update).not.toHaveBeenCalled();
+});
+
+it("asks for confirmation before deleting a prospect", async () => {
+  const remove = vi.fn().mockResolvedValue(true);
+  withVm({ remove });
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    within(dialog).getByText(/Permanently delete .*Jane Prospect/),
+  ).toBeInTheDocument();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(remove).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete prospect",
+    }),
+  );
+  await waitFor(() => expect(remove).toHaveBeenCalledWith("prospect-1"));
+});
+
+it("keeps the confirmation open and shows why when the server refuses the delete", async () => {
+  withVm({
+    remove: vi.fn().mockResolvedValue(false),
+    error: "Screening records exist for this prospect, so it cannot be deleted",
+  });
+  render(<ProspectsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete prospect",
+    }),
+  );
+  expect(
+    within(screen.getByRole("dialog")).getByText(
+      /Screening records exist for this prospect/,
+    ),
+  ).toBeInTheDocument();
+});
+
+it("does not offer Delete for a leased prospect", () => {
+  const base = vi.mocked(useProspects)("org", "building");
+  withVm({
+    list: {
+      ...base.list,
+      data: [{ ...base.list.data![0], status: "LEASED", lease_id: "lease-1" }],
+    },
+  });
+  render(<ProspectsPanel org="org" building="building" />);
+  expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Delete" }),
+  ).not.toBeInTheDocument();
+});
+
 it("opens the screening dialog for a prospect", async () => {
   render(<ProspectsPanel org="org" building="building" />);
   await userEvent

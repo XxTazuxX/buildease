@@ -2,7 +2,11 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
-import { useMaintenance, useRequestDetail } from "./useMaintenance";
+import {
+  useMaintenance,
+  useRecurringPlans,
+  useRequestDetail,
+} from "./useMaintenance";
 import { maintenanceApi, stripPhotoMetadata } from "../model/maintenance";
 
 vi.mock("../model/maintenance", async (importOriginal) => {
@@ -24,6 +28,13 @@ vi.mock("../model/maintenance", async (importOriginal) => {
       preparePhoto: vi.fn(),
       vendors: vi.fn().mockResolvedValue([]),
       createVendor: vi.fn().mockResolvedValue(undefined),
+      updateVendor: vi.fn().mockResolvedValue(undefined),
+      deleteVendor: vi.fn().mockResolvedValue(undefined),
+      deleteCategory: vi.fn().mockResolvedValue(undefined),
+      recurringPlans: vi.fn().mockResolvedValue([]),
+      createRecurringPlan: vi.fn().mockResolvedValue(undefined),
+      updateRecurringPlan: vi.fn().mockResolvedValue(undefined),
+      deleteRecurringPlan: vi.fn().mockResolvedValue(undefined),
       assignStaff: vi.fn().mockResolvedValue(undefined),
       assignVendor: vi.fn().mockResolvedValue(undefined),
       addWorkLog: vi.fn().mockResolvedValue(undefined),
@@ -167,6 +178,94 @@ it("updateCategory calls the api with the category id and invalidates on success
     body,
   );
   expect(invalidate).toHaveBeenCalled();
+});
+
+it("deletes a category and reports why it was refused", async () => {
+  const { result } = renderHook(() => useMaintenance("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    expect(await result.current.deleteCategory("cat-1")).toBe(true);
+  });
+  expect(maintenanceApi.deleteCategory).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "cat-1",
+  );
+
+  vi.mocked(maintenanceApi.deleteCategory).mockRejectedValueOnce(
+    new Error("Maintenance requests use this category"),
+  );
+  await act(async () => {
+    expect(await result.current.deleteCategory("cat-2")).toBe(false);
+  });
+  expect(result.current.error).toBe("Maintenance requests use this category");
+});
+
+it("edits and deletes a vendor through the right endpoints", async () => {
+  const invalidate = vi.fn();
+  const { result } = renderHook(() => useMaintenance("org", "building"), {
+    wrapper,
+  });
+  vi.spyOn(query, "invalidateQueries").mockImplementation(invalidate as never);
+  await act(async () => {
+    await result.current.updateVendor("vendor-1", {
+      name: "Glass & Co",
+      email: "glass@example.test",
+    });
+    await result.current.deleteVendor("vendor-1");
+  });
+  expect(maintenanceApi.updateVendor).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "vendor-1",
+    { name: "Glass & Co", email: "glass@example.test" },
+  );
+  expect(maintenanceApi.deleteVendor).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "vendor-1",
+  );
+  expect(invalidate).toHaveBeenCalledTimes(2);
+});
+
+it("useRecurringPlans validates, edits and deletes plans", async () => {
+  const { result } = renderHook(() => useRecurringPlans("org", "building"), {
+    wrapper,
+  });
+  const plan = {
+    spaceId: "11111111-1111-1111-1111-111111111111",
+    categoryId: "22222222-2222-2222-2222-222222222222",
+    title: "Boiler service",
+    description: "Annual service",
+    intervalDays: 365,
+    nextRunOn: "2026-06-01",
+  };
+  await act(async () => {
+    expect(await result.current.update("plan-1", plan)).toBe(true);
+  });
+  expect(maintenanceApi.updateRecurringPlan).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "plan-1",
+    plan,
+  );
+
+  await act(async () => {
+    expect(
+      await result.current.update("plan-1", { ...plan, intervalDays: 0 }),
+    ).toBe(false);
+  });
+  expect(maintenanceApi.updateRecurringPlan).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    expect(await result.current.remove("plan-1")).toBe(true);
+  });
+  expect(maintenanceApi.deleteRecurringPlan).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "plan-1",
+  );
 });
 
 it("useRequestDetail fetches the request and invalidates it after commenting", async () => {

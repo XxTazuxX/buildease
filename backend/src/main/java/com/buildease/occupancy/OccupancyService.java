@@ -164,6 +164,47 @@ public class OccupancyService {
     return id;
   }
 
+  public void updateHouseholdMember(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID resident,
+      UUID member,
+      String name,
+      String relationship) {
+    manager(actor, organization, building);
+    lockedHouseholdMember(organization, building, resident, member);
+    db.update(
+        "update household_members set name=?,relationship=? where organization_id=? and building_id=? and id=?",
+        name.trim(),
+        blank(relationship),
+        organization,
+        building,
+        member);
+    db.audit(actor.id(), organization, "HOUSEHOLD_MEMBER_UPDATED", member);
+  }
+
+  public void removeHouseholdMember(
+      Actor actor, UUID organization, UUID building, UUID resident, UUID member) {
+    manager(actor, organization, building);
+    lockedHouseholdMember(organization, building, resident, member);
+    db.update(
+        "delete from household_members where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        member);
+    db.audit(actor.id(), organization, "HOUSEHOLD_MEMBER_REMOVED", member);
+  }
+
+  private void lockedHouseholdMember(UUID organization, UUID building, UUID resident, UUID member) {
+    db.one(
+        "select id from household_members where organization_id=? and building_id=? and resident_id=? and id=? for update",
+        organization,
+        building,
+        resident,
+        member);
+  }
+
   public UUID assign(
       Actor actor,
       UUID organization,

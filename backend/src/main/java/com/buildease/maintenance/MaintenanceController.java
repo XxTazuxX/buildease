@@ -282,6 +282,71 @@ public class MaintenanceController {
             body.accountId()));
   }
 
+  @PatchMapping("/vendors/{vendor}")
+  void updateVendor(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID vendor,
+      @Valid @RequestBody VendorBody body) {
+    service.updateVendor(
+        actor,
+        organization,
+        building,
+        vendor,
+        body.name(),
+        body.email(),
+        body.phone(),
+        body.accountId());
+  }
+
+  @DeleteMapping("/vendors/{vendor}")
+  void deleteVendor(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID vendor) {
+    service.deleteVendor(actor, organization, building, vendor);
+  }
+
+  @DeleteMapping("/categories/{category}")
+  void deleteCategory(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID category) {
+    service.deleteCategory(actor, organization, building, category);
+  }
+
+  @PatchMapping("/recurring-plans/{plan}")
+  void updateRecurring(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID plan,
+      @Valid @RequestBody RecurringBody body) {
+    service.updateRecurringPlan(
+        actor,
+        organization,
+        building,
+        plan,
+        body.spaceId(),
+        body.categoryId(),
+        body.title(),
+        body.description(),
+        body.intervalDays(),
+        body.nextRunOn());
+  }
+
+  @DeleteMapping("/recurring-plans/{plan}")
+  void deleteRecurring(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID plan) {
+    service.deleteRecurringPlan(actor, organization, building, plan);
+  }
+
   @GetMapping("/recurring-plans")
   Object recurring(
       @RequestAttribute Actor actor, @PathVariable UUID organization, @PathVariable UUID building) {

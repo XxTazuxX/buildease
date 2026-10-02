@@ -76,6 +76,28 @@ public class OccupancyController {
             actor, organization, building, resident, body.name(), body.relationship()));
   }
 
+  @PatchMapping("/residents/{resident}/household-members/{member}")
+  void updateHousehold(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID resident,
+      @PathVariable UUID member,
+      @Valid @RequestBody HouseholdBody body) {
+    service.updateHouseholdMember(
+        actor, organization, building, resident, member, body.name(), body.relationship());
+  }
+
+  @DeleteMapping("/residents/{resident}/household-members/{member}")
+  void removeHousehold(
+      @RequestAttribute Actor actor,
+      @PathVariable UUID organization,
+      @PathVariable UUID building,
+      @PathVariable UUID resident,
+      @PathVariable UUID member) {
+    service.removeHouseholdMember(actor, organization, building, resident, member);
+  }
+
   @PostMapping("/space-assignments")
   Object assign(
       @RequestAttribute Actor actor,

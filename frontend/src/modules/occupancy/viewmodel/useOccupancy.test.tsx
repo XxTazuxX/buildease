@@ -13,6 +13,8 @@ vi.mock("../model/occupancy", () => ({
     updateResident: vi.fn().mockResolvedValue(undefined),
     assign: vi.fn().mockResolvedValue(undefined),
     end: vi.fn().mockResolvedValue(undefined),
+    updateHouseholdMember: vi.fn().mockResolvedValue(undefined),
+    removeHouseholdMember: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock("@/modules/buildings/model/buildings", () => ({
@@ -48,6 +50,52 @@ it("assigns a resident to a space starting today and invalidates the workspace",
     queryKey: ["org", "building", "building"],
   });
   expect(result.current.busy).toBe(false);
+});
+
+it("edits a household member with trimmed values and an optional relationship", async () => {
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useOccupancy("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.updateHouseholdMember(
+      "resident-1",
+      "member-1",
+      "  Kim Lee ",
+      "   ",
+    );
+  });
+  expect(occupancyApi.updateHouseholdMember).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "resident-1",
+    "member-1",
+    { name: "Kim Lee", relationship: undefined },
+  );
+  expect(invalidate).toHaveBeenCalled();
+});
+
+it("removes a household member and reports a refusal", async () => {
+  const { result } = renderHook(() => useOccupancy("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    expect(await result.current.removeHouseholdMember("r1", "m1")).toBe(true);
+  });
+  expect(occupancyApi.removeHouseholdMember).toHaveBeenCalledWith(
+    "org",
+    "building",
+    "r1",
+    "m1",
+  );
+
+  vi.mocked(occupancyApi.removeHouseholdMember).mockRejectedValueOnce(
+    new Error("Not found"),
+  );
+  await act(async () => {
+    expect(await result.current.removeHouseholdMember("r1", "m2")).toBe(false);
+  });
+  expect(result.current.error).toBe("Not found");
 });
 
 it("ends an assignment as of today", async () => {

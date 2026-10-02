@@ -98,6 +98,38 @@ public class MaintenanceService {
     db.audit(actor.id(), organization, "MAINTENANCE_CATEGORY_UPDATED", category);
   }
 
+  public void deleteCategory(Actor actor, UUID organization, UUID building, UUID category) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from maintenance_categories where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        category);
+    if (db.find(
+            "select 1 from maintenance_requests where organization_id=? and building_id=? and category_id=? limit 1",
+            organization,
+            building,
+            category)
+        .isPresent())
+      throw new ApiException(
+          409,
+          "Maintenance requests use this category, so it cannot be deleted. Rename it instead");
+    if (db.find(
+            "select 1 from recurring_maintenance_plans where organization_id=? and building_id=? and category_id=? limit 1",
+            organization,
+            building,
+            category)
+        .isPresent())
+      throw new ApiException(
+          409, "Recurring plans use this category. Remove those plans before deleting it");
+    db.update(
+        "delete from maintenance_categories where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        category);
+    db.audit(actor.id(), organization, "MAINTENANCE_CATEGORY_DELETED", category);
+  }
+
   public List<Map<String, Object>> categories(Actor actor, UUID organization, UUID building) {
     enter(actor, organization, building);
     return db.rows(
@@ -593,12 +625,142 @@ public class MaintenanceService {
     return id;
   }
 
+  public void updateVendor(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID vendor,
+      String name,
+      String email,
+      String phone,
+      UUID account) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from vendors where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        vendor);
+    if (account != null)
+      db.one(
+          "select 1 from building_roles where organization_id=? and building_id=? and account_id=? and role='VENDOR'",
+          organization,
+          building,
+          account);
+    db.update(
+        "update vendors set name=?,email=?,phone=? where organization_id=? and building_id=? and id=?",
+        name.trim(),
+        trim(email),
+        trim(phone),
+        organization,
+        building,
+        vendor);
+    db.update(
+        "delete from vendor_accounts where organization_id=? and building_id=? and vendor_id=?",
+        organization,
+        building,
+        vendor);
+    if (account != null)
+      db.update(
+          "insert into vendor_accounts(organization_id,building_id,vendor_id,account_id) values (?,?,?,?)",
+          organization,
+          building,
+          vendor,
+          account);
+    db.audit(actor.id(), organization, "VENDOR_UPDATED", vendor);
+  }
+
+  public void deleteVendor(Actor actor, UUID organization, UUID building, UUID vendor) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from vendors where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        vendor);
+    if (db.find(
+            "select 1 from work_orders where organization_id=? and building_id=? and vendor_id=? limit 1",
+            organization,
+            building,
+            vendor)
+        .isPresent())
+      throw new ApiException(
+          409, "Work orders were assigned to this vendor, so it cannot be deleted");
+    db.update(
+        "delete from vendor_accounts where organization_id=? and building_id=? and vendor_id=?",
+        organization,
+        building,
+        vendor);
+    db.update(
+        "delete from vendors where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        vendor);
+    db.audit(actor.id(), organization, "VENDOR_DELETED", vendor);
+  }
+
   public List<Map<String, Object>> vendors(Actor actor, UUID organization, UUID building) {
     manager(actor, organization, building);
     return db.rows(
-        "select id,name,email,phone,active from vendors where organization_id=? and building_id=? order by name,id",
+        "select v.id,v.name,v.email,v.phone,v.active,"
+            + "(select va.account_id from vendor_accounts va where va.organization_id=v.organization_id and va.building_id=v.building_id and va.vendor_id=v.id limit 1) as account_id "
+            + "from vendors v where v.organization_id=? and v.building_id=? order by v.name,v.id",
         organization,
         building);
+  }
+
+  public void updateRecurringPlan(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID plan,
+      UUID space,
+      UUID category,
+      String title,
+      String description,
+      int intervalDays,
+      java.time.LocalDate nextRunOn) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from recurring_maintenance_plans where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        plan);
+    db.one(
+        "select 1 from spaces where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        space);
+    db.one(
+        "select 1 from maintenance_categories where organization_id=? and building_id=? and id=? and active",
+        organization,
+        building,
+        category);
+    db.update(
+        "update recurring_maintenance_plans set space_id=?,category_id=?,title=?,description=?,interval_days=?,next_run_on=? where organization_id=? and building_id=? and id=?",
+        space,
+        category,
+        title.trim(),
+        description.trim(),
+        intervalDays,
+        nextRunOn,
+        organization,
+        building,
+        plan);
+    db.audit(actor.id(), organization, "RECURRING_MAINTENANCE_PLAN_UPDATED", plan);
+  }
+
+  public void deleteRecurringPlan(Actor actor, UUID organization, UUID building, UUID plan) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from recurring_maintenance_plans where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        plan);
+    db.update(
+        "delete from recurring_maintenance_plans where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        plan);
+    db.audit(actor.id(), organization, "RECURRING_MAINTENANCE_PLAN_DELETED", plan);
   }
 
   public UUID createRecurringPlan(

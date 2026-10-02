@@ -53,6 +53,16 @@ export function useBuildingConfiguration(org: string, building: string) {
       ),
     createLevel: (body: { name: string; code: string; sortOrder: number }) =>
       run(() => buildingsApi.createLevel(org, building, body)),
+    updateLevel: (
+      level: string,
+      body: { name: string; code: string; sortOrder: number },
+    ) => run(() => buildingsApi.updateLevel(org, building, level, body)),
+    deleteLevel: (level: string) =>
+      run(() => buildingsApi.deleteLevel(org, building, level)),
+    updateSpace: (space: string, body: unknown) =>
+      run(() => buildingsApi.updateSpace(org, building, space, body)),
+    deleteSpace: (space: string) =>
+      run(() => buildingsApi.deleteSpace(org, building, space)),
     createSpace: (body: unknown) =>
       run(() => buildingsApi.createSpace(org, building, body)),
     setStatus: (space: string, status: Exclude<SpaceStatus, "OCCUPIED">) =>

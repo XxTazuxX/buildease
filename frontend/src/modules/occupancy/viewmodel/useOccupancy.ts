@@ -54,6 +54,22 @@ export function useOccupancy(org: string, building: string) {
           relationship: relationship.trim() || undefined,
         }),
       ),
+    updateHouseholdMember: (
+      resident: string,
+      member: string,
+      name: string,
+      relationship: string,
+    ) =>
+      run(() =>
+        occupancyApi.updateHouseholdMember(org, building, resident, member, {
+          name: name.trim(),
+          relationship: relationship.trim() || undefined,
+        }),
+      ),
+    removeHouseholdMember: (resident: string, member: string) =>
+      run(() =>
+        occupancyApi.removeHouseholdMember(org, building, resident, member),
+      ),
     assign: (residentId: string, spaceId: string) =>
       run(() =>
         occupancyApi.assign(org, building, {

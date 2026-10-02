@@ -45,6 +45,10 @@ export const newProspectSchema = z.object({
 });
 export type NewProspect = z.infer<typeof newProspectSchema>;
 
+/** The space a prospect is interested in is fixed once created. */
+export const updateProspectSchema = newProspectSchema.omit({ spaceId: true });
+export type UpdatedProspect = z.infer<typeof updateProspectSchema>;
+
 export const linkLeaseSchema = z.object({
   leaseId: requiredChoice("Select a lease"),
 });
@@ -85,6 +89,10 @@ export const prospectsApi = {
     }),
   detail: (org: string, building: string, id: string) =>
     api<ProspectDetail>(`${base(org, building)}/${id}`),
+  update: (org: string, building: string, id: string, body: UpdatedProspect) =>
+    api(`${base(org, building)}/${id}`, "PATCH", body),
+  remove: (org: string, building: string, id: string) =>
+    api(`${base(org, building)}/${id}`, "DELETE"),
   updateStatus: (
     org: string,
     building: string,

@@ -62,6 +62,53 @@ it("lists assets with their category, space, and warranty", () => {
   expect(screen.getByText("ACTIVE")).toBeInTheDocument();
 });
 
+it("asks for confirmation before deleting an asset", async () => {
+  const remove = vi.fn().mockResolvedValue(true);
+  vi.mocked(useAssets).mockReturnValue({
+    ...vi.mocked(useAssets)("org", "building"),
+    remove,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<AssetsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    within(dialog).getByText(/Permanently delete .*Rooftop HVAC Unit/),
+  ).toBeInTheDocument();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(remove).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete asset",
+    }),
+  );
+  await waitFor(() => expect(remove).toHaveBeenCalledWith("asset-1"));
+});
+
+it("keeps the delete confirmation open and shows why the server refused", async () => {
+  vi.mocked(useAssets).mockReturnValue({
+    ...vi.mocked(useAssets)("org", "building"),
+    remove: vi.fn().mockResolvedValue(false),
+    error:
+      "Meter readings are recorded for this asset, so it cannot be deleted",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(<AssetsPanel org="org" building="building" />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Delete asset",
+    }),
+  );
+  expect(
+    within(screen.getByRole("dialog")).getByText(/Meter readings are recorded/),
+  ).toBeInTheDocument();
+});
+
 it("retires an active asset", async () => {
   render(<AssetsPanel org="org" building="building" />);
   await userEvent.setup().click(screen.getByRole("button", { name: "Retire" }));

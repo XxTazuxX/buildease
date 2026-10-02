@@ -116,6 +116,30 @@ public class AssetService {
     db.audit(actor.id(), organization, "ASSET_UPDATED", asset);
   }
 
+  public void delete(Actor actor, UUID organization, UUID building, UUID asset) {
+    manager(actor, organization, building);
+    db.one(
+        "select id from assets where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        asset);
+    if (db.find(
+            "select 1 from asset_meter_readings where organization_id=? and building_id=? and asset_id=? limit 1",
+            organization,
+            building,
+            asset)
+        .isPresent())
+      throw new ApiException(
+          409,
+          "Meter readings are recorded for this asset, so it cannot be deleted. Retire it instead");
+    db.update(
+        "delete from assets where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        asset);
+    db.audit(actor.id(), organization, "ASSET_DELETED", asset);
+  }
+
   public void setStatus(
       Actor actor, UUID organization, UUID building, UUID asset, AssetStatus status) {
     manager(actor, organization, building);

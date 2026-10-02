@@ -5,8 +5,10 @@ import { leasesApi, type Lease } from "@/modules/leases";
 import {
   newProspectSchema,
   prospectsApi,
+  updateProspectSchema,
   type NewProspect,
   type ProspectStatus,
+  type UpdatedProspect,
 } from "../model/prospects";
 
 export function useProspects(
@@ -47,6 +49,17 @@ export function useProspects(
       run(() =>
         prospectsApi.create(org, building, newProspectSchema.parse(body)),
       ),
+    loadDetail: (id: string) => prospectsApi.detail(org, building, id),
+    update: (id: string, body: UpdatedProspect) =>
+      run(() =>
+        prospectsApi.update(
+          org,
+          building,
+          id,
+          updateProspectSchema.parse(body),
+        ),
+      ),
+    remove: (id: string) => run(() => prospectsApi.remove(org, building, id)),
     updateStatus: (id: string, status: ProspectStatus, notes?: string) =>
       run(() => prospectsApi.updateStatus(org, building, id, status, notes)),
     linkLease: (id: string, leaseId: string) =>

@@ -144,6 +144,33 @@ export const buildingsApi = {
     building: string,
     body: { name: string; code: string; sortOrder: number },
   ) => api(`/organizations/${org}/buildings/${building}/levels`, "POST", body),
+  updateLevel: (
+    org: string,
+    building: string,
+    level: string,
+    body: { name: string; code: string; sortOrder: number },
+  ) =>
+    api(
+      `/organizations/${org}/buildings/${building}/levels/${level}`,
+      "PATCH",
+      body,
+    ),
+  deleteLevel: (org: string, building: string, level: string) =>
+    api(
+      `/organizations/${org}/buildings/${building}/levels/${level}`,
+      "DELETE",
+    ),
+  updateSpace: (org: string, building: string, space: string, body: unknown) =>
+    api(
+      `/organizations/${org}/buildings/${building}/spaces/${space}`,
+      "PATCH",
+      body,
+    ),
+  deleteSpace: (org: string, building: string, space: string) =>
+    api(
+      `/organizations/${org}/buildings/${building}/spaces/${space}`,
+      "DELETE",
+    ),
   spaces: (org: string, building: string) =>
     api<Space[]>(`/organizations/${org}/buildings/${building}/spaces`),
   createSpace: (org: string, building: string, body: unknown) =>

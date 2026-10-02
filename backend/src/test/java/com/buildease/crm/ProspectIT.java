@@ -65,6 +65,7 @@ class ProspectIT {
   @Autowired OccupancyService occupancy;
   @Autowired LeaseService leases;
   @Autowired ProspectService prospects;
+  @Autowired com.buildease.screening.ScreeningService screenings;
   @Autowired PasswordEncoder passwords;
   @Autowired JwtDecoder decoder;
   @Autowired com.buildease.auth.AuthService auth;
@@ -259,6 +260,112 @@ class ProspectIT {
         startsOn,
         null,
         null);
+  }
+
+  private UUID newProspect(Setup s) {
+    return prospects.create(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        s.space(),
+        null,
+        "Jane Prospect",
+        "jane@example.test",
+        "555-0100",
+        "Called twice");
+  }
+
+  @Test
+  void editingAProspectUpdatesItsContactDetailsAndKeepsTheStatus() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect = newProspect(s);
+    prospects.updateStatus(
+        s.owner(), s.organization(), s.building(), prospect, ProspectStatus.CONTACTED, null);
+
+    prospects.update(
+        s.owner(),
+        s.organization(),
+        s.building(),
+        prospect,
+        "  Jane Q. Prospect ",
+        "",
+        null,
+        "Prefers email");
+
+    var detail = prospects.detail(s.owner(), s.organization(), s.building(), prospect);
+    assertThat(detail)
+        .containsEntry("name", "Jane Q. Prospect")
+        .containsEntry("email", null)
+        .containsEntry("phone", null)
+        .containsEntry("notes", "Prefers email")
+        .containsEntry("status", "CONTACTED");
+  }
+
+  @Test
+  void aProspectWithNoHistoryCanBeDeleted() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect = newProspect(s);
+
+    prospects.delete(s.owner(), s.organization(), s.building(), prospect);
+
+    assertThatThrownBy(() -> prospects.detail(s.owner(), s.organization(), s.building(), prospect))
+        .isInstanceOf(ApiException.class);
+    assertThat(
+            prospects.list(s.owner(), s.organization(), s.building(), null, null, 0).stream()
+                .map(row -> row.get("id")))
+        .doesNotContain(prospect);
+  }
+
+  @Test
+  void aScreenedProspectCannotBeDeleted() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect = newProspect(s);
+    prospects.updateStatus(
+        s.owner(), s.organization(), s.building(), prospect, ProspectStatus.APPLIED, null);
+    screenings.request(s.owner(), s.organization(), s.building(), prospect);
+
+    assertThatThrownBy(() -> prospects.delete(s.owner(), s.organization(), s.building(), prospect))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+    assertThat(prospects.detail(s.owner(), s.organization(), s.building(), prospect))
+        .containsEntry("name", "Jane Prospect");
+  }
+
+  @Test
+  void aLeasedProspectCannotBeDeleted() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect = newProspect(s);
+    UUID lease = draftLease(s);
+    prospects.updateStatus(
+        s.owner(), s.organization(), s.building(), prospect, ProspectStatus.APPROVED, null);
+    prospects.linkLease(s.owner(), s.organization(), s.building(), prospect, lease);
+
+    assertThatThrownBy(() -> prospects.delete(s.owner(), s.organization(), s.building(), prospect))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(409));
+  }
+
+  @Test
+  void nonManagerCannotEditOrDeleteProspects() {
+    Setup s = organizationWithVacantSpace();
+    UUID prospect = newProspect(s);
+    String tenantEmail = "tenant-" + UUID.randomUUID() + "@example.test";
+    tenants.invite(
+        s.owner(),
+        s.organization(),
+        tenantEmail,
+        "Tenant",
+        password,
+        false,
+        s.building(),
+        Set.of(Role.TENANT));
+    Actor tenant = actor(tenantEmail);
+
+    assertThatThrownBy(
+            () ->
+                prospects.update(
+                    tenant, s.organization(), s.building(), prospect, "Hacked", null, null, null))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
+    assertThatThrownBy(() -> prospects.delete(tenant, s.organization(), s.building(), prospect))
+        .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status).isEqualTo(403));
   }
 
   @Test

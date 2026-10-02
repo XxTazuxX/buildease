@@ -14,6 +14,7 @@ vi.mock("../model/assets", async (importOriginal) => {
       create: vi.fn(),
       detail: vi.fn(),
       setStatus: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn(),
       recordMeterReading: vi.fn(),
     },
   };
@@ -48,6 +49,29 @@ it("creates a valid asset and invalidates the list", async () => {
   expect(invalidate).toHaveBeenCalledWith({
     queryKey: ["org", "building", "building", "assets"],
   });
+});
+
+it("deletes an asset, refreshing the list, and reports a refusal", async () => {
+  vi.mocked(assetsApi.remove).mockResolvedValueOnce(undefined);
+  const invalidate = vi.spyOn(query, "invalidateQueries");
+  const { result } = renderHook(() => useAssets("org", "building"), {
+    wrapper,
+  });
+  await act(async () => {
+    expect(await result.current.remove("asset-1")).toBe(true);
+  });
+  expect(assetsApi.remove).toHaveBeenCalledWith("org", "building", "asset-1");
+  expect(invalidate).toHaveBeenCalled();
+
+  vi.mocked(assetsApi.remove).mockRejectedValueOnce(
+    new Error("Meter readings are recorded for this asset"),
+  );
+  await act(async () => {
+    expect(await result.current.remove("asset-2")).toBe(false);
+  });
+  expect(result.current.error).toBe(
+    "Meter readings are recorded for this asset",
+  );
 });
 
 it("retires and reactivates an asset", async () => {

@@ -7,6 +7,7 @@ import com.buildease.common.Store;
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.util.*;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -143,6 +144,155 @@ public class BuildingService {
         sortOrder);
     db.audit(actor.id(), organization, "BUILDING_LEVEL_CREATED", id);
     return id;
+  }
+
+  public void updateLevel(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID level,
+      String name,
+      String code,
+      int sortOrder) {
+    owner(actor, organization, building);
+    lockedLevel(organization, building, level);
+    try {
+      db.update(
+          "update building_levels set name=?,code=?,sort_order=?,updated_at=now() where organization_id=? and building_id=? and id=?",
+          name,
+          upper(code),
+          sortOrder,
+          organization,
+          building,
+          level);
+    } catch (DataIntegrityViolationException e) {
+      throw new ApiException(409, "Another level already uses this code");
+    }
+    db.audit(actor.id(), organization, "BUILDING_LEVEL_UPDATED", level);
+  }
+
+  public void deleteLevel(Actor actor, UUID organization, UUID building, UUID level) {
+    owner(actor, organization, building);
+    lockedLevel(organization, building, level);
+    if (db.find(
+            "select 1 from spaces where organization_id=? and building_id=? and level_id=? limit 1",
+            organization,
+            building,
+            level)
+        .isPresent()) throw new ApiException(409, "Move or delete the spaces on this level first");
+    db.update(
+        "delete from building_levels where organization_id=? and building_id=? and id=?",
+        organization,
+        building,
+        level);
+    db.audit(actor.id(), organization, "BUILDING_LEVEL_DELETED", level);
+  }
+
+  public void updateSpace(
+      Actor actor,
+      UUID organization,
+      UUID building,
+      UUID space,
+      UUID level,
+      UUID parent,
+      String name,
+      String code,
+      SpaceType type,
+      boolean rentable,
+      BigDecimal area,
+      Integer capacity,
+      String notes) {
+    owner(actor, organization, building);
+    var row = lockedSpace(organization, building, space);
+    rejectCycle(organization, building, space, parent);
+    if ((boolean) row.get("rentable")
+        && !rentable
+        && db.find(
+                "select 1 from leases where organization_id=? and building_id=? and space_id=? and status in ('DRAFT','ACTIVE') limit 1",
+                organization,
+                building,
+                space)
+            .isPresent())
+      throw new ApiException(409, "A space with an open lease must stay rentable");
+    try {
+      db.update(
+          "update spaces set level_id=?,parent_space_id=?,name=?,code=?,type=?,rentable=?,area=?,capacity=?,notes=?,updated_at=now() where organization_id=? and building_id=? and id=?",
+          level,
+          parent,
+          name,
+          upper(code),
+          type.name(),
+          rentable,
+          area,
+          capacity,
+          blank(notes),
+          organization,
+          building,
+          space);
+    } catch (DataIntegrityViolationException e) {
+      throw new ApiException(
+          409, "Another space already uses this code, or the level or parent space is invalid");
+    }
+    db.audit(actor.id(), organization, "SPACE_UPDATED", space);
+  }
+
+  public void deleteSpace(Actor actor, UUID organization, UUID building, UUID space) {
+    owner(actor, organization, building);
+    var row = lockedSpace(organization, building, space);
+    if (SpaceStatus.valueOf((String) row.get("status")) == SpaceStatus.OCCUPIED)
+      throw new ApiException(409, "An occupied space cannot be deleted");
+    if (db.find(
+            "select 1 from spaces where organization_id=? and building_id=? and parent_space_id=? limit 1",
+            organization,
+            building,
+            space)
+        .isPresent())
+      throw new ApiException(409, "Move or delete the child spaces of this space first");
+    try {
+      db.update(
+          "delete from spaces where organization_id=? and building_id=? and id=?",
+          organization,
+          building,
+          space);
+    } catch (DataIntegrityViolationException e) {
+      throw new ApiException(
+          409,
+          "This space has leases, residents, listings, requests, inspections or assets and cannot be deleted. Mark it Inactive instead");
+    }
+    db.audit(actor.id(), organization, "SPACE_DELETED", space);
+  }
+
+  /** A space may not be moved inside itself or any of its own descendants. */
+  private void rejectCycle(UUID organization, UUID building, UUID space, UUID parent) {
+    UUID cursor = parent;
+    for (int depth = 0; cursor != null && depth < 1000; depth++) {
+      if (cursor.equals(space))
+        throw new ApiException(409, "A space cannot be placed inside itself or its child spaces");
+      cursor =
+          db.find(
+                  "select parent_space_id from spaces where organization_id=? and building_id=? and id=?",
+                  organization,
+                  building,
+                  cursor)
+              .map(found -> (UUID) found.get("parent_space_id"))
+              .orElse(null);
+    }
+  }
+
+  private Map<String, Object> lockedLevel(UUID organization, UUID building, UUID level) {
+    return db.one(
+        "select id from building_levels where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        level);
+  }
+
+  private Map<String, Object> lockedSpace(UUID organization, UUID building, UUID space) {
+    return db.one(
+        "select status,rentable from spaces where organization_id=? and building_id=? and id=? for update",
+        organization,
+        building,
+        space);
   }
 
   public List<Map<String, Object>> spaces(Actor actor, UUID organization, UUID building) {

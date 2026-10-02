@@ -81,6 +81,13 @@ export function BuildingConfigurationPanel({
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
   const [spaceOpen, setSpaceOpen] = useState(false);
+  const [editingLevel, setEditingLevel] = useState<string | null>(null);
+  const [editingSpace, setEditingSpace] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{
+    kind: "level" | "space";
+    id: string;
+    name: string;
+  } | null>(null);
   const configuration = useZodForm(configurationFormSchema, emptyConfiguration);
   const level = useZodForm(levelFormSchema, emptyLevel);
   const space = useZodForm(spaceFormSchema, emptySpace);
@@ -143,7 +150,8 @@ export function BuildingConfigurationPanel({
               <Button
                 variant="outlined"
                 onClick={() => {
-                  level.reset();
+                  level.reset(emptyLevel);
+                  setEditingLevel(null);
                   setLevelOpen(true);
                 }}
               >
@@ -152,7 +160,8 @@ export function BuildingConfigurationPanel({
               <Button
                 variant="contained"
                 onClick={() => {
-                  space.reset();
+                  space.reset(emptySpace);
+                  setEditingSpace(null);
                   setSpaceOpen(true);
                 }}
               >
@@ -180,6 +189,41 @@ export function BuildingConfigurationPanel({
                   <Typography variant="caption" color="text.secondary">
                     {item.code} · Order {item.sort_order}
                   </Typography>
+                  {owner && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                      <Button
+                        size="small"
+                        disabled={vm.busy}
+                        aria-label={`Edit level ${item.name}`}
+                        onClick={() => {
+                          level.reset({
+                            name: item.name,
+                            code: item.code,
+                            sortOrder: String(item.sort_order),
+                          });
+                          setEditingLevel(item.id);
+                          setLevelOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        disabled={vm.busy}
+                        aria-label={`Delete level ${item.name}`}
+                        onClick={() =>
+                          setDeleting({
+                            kind: "level",
+                            id: item.id,
+                            name: item.name,
+                          })
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
+                  )}
                 </Paper>
               ))}
               {!vm.levels.isLoading && vm.levels.data?.length === 0 && (
@@ -259,6 +303,52 @@ export function BuildingConfigurationPanel({
                       ))}
                     </TextField>
                   )}
+                  {owner && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <Button
+                        size="small"
+                        disabled={vm.busy}
+                        aria-label={`Edit space ${item.name}`}
+                        onClick={() => {
+                          space.reset({
+                            name: item.name,
+                            code: item.code,
+                            type: item.type,
+                            levelId: item.level_id ?? "",
+                            parentSpaceId: item.parent_space_id ?? "",
+                            rentable: item.rentable,
+                            area: item.area == null ? "" : String(item.area),
+                            capacity:
+                              item.capacity == null
+                                ? ""
+                                : String(item.capacity),
+                            notes: item.notes ?? "",
+                          });
+                          setEditingSpace(item.id);
+                          setSpaceOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      {item.status !== "OCCUPIED" && (
+                        <Button
+                          size="small"
+                          color="error"
+                          disabled={vm.busy}
+                          aria-label={`Delete space ${item.name}`}
+                          onClick={() =>
+                            setDeleting({
+                              kind: "space",
+                              id: item.id,
+                              name: item.name,
+                            })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Stack>
+                  )}
                 </Paper>
               ))}
             </Box>
@@ -322,7 +412,9 @@ export function BuildingConfigurationPanel({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Add level or zone</DialogTitle>
+        <DialogTitle>
+          {editingLevel ? "Edit level or zone" : "Add level or zone"}
+        </DialogTitle>
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -337,14 +429,16 @@ export function BuildingConfigurationPanel({
               variant="contained"
               disabled={vm.busy}
               onClick={level.submit(async (values) => {
-                const ok = await vm.createLevel(values);
+                const ok = await (editingLevel
+                  ? vm.updateLevel(editingLevel, values)
+                  : vm.createLevel(values));
                 if (ok) {
                   setLevelOpen(false);
-                  level.reset();
+                  level.reset(emptyLevel);
                 }
               })}
             >
-              Add level
+              {editingLevel ? "Save level" : "Add level"}
             </Button>
           </Stack>
         </DialogContent>
@@ -356,7 +450,11 @@ export function BuildingConfigurationPanel({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add flat, room, or space</DialogTitle>
+        <DialogTitle>
+          {editingSpace
+            ? "Edit flat, room, or space"
+            : "Add flat, room, or space"}
+        </DialogTitle>
         <Divider />
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -383,11 +481,13 @@ export function BuildingConfigurationPanel({
               {...space.field("parentSpaceId")}
             >
               <MenuItem value="">No parent</MenuItem>
-              {vm.spaces.data?.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {item.name}
-                </MenuItem>
-              ))}
+              {vm.spaces.data
+                ?.filter((item) => item.id !== editingSpace)
+                .map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.name}
+                  </MenuItem>
+                ))}
             </TextField>
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -426,15 +526,61 @@ export function BuildingConfigurationPanel({
               variant="contained"
               disabled={vm.busy}
               onClick={space.submit(async (values) => {
-                const ok = await vm.createSpace(values);
+                const ok = await (editingSpace
+                  ? vm.updateSpace(editingSpace, values)
+                  : vm.createSpace(values));
                 if (ok) setSpaceOpen(false);
               })}
             >
-              Add space
+              {editingSpace ? "Save space" : "Add space"}
             </Button>
           </Stack>
         </DialogContent>
       </AdaptiveDialog>
+
+      {deleting && (
+        <AdaptiveDialog
+          open
+          onClose={() => setDeleting(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Delete {deleting.kind}</DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {vm.error && <Alert severity="error">{vm.error}</Alert>}
+              <Typography>
+                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+                undone.{" "}
+                {deleting.kind === "level"
+                  ? "A level that still has spaces can't be deleted."
+                  : "A space that has leases, residents, listings, requests or assets can't be deleted; mark it Inactive instead."}
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "flex-end" }}
+              >
+                <Button onClick={() => setDeleting(null)}>Cancel</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={vm.busy}
+                  onClick={async () => {
+                    const ok = await (deleting.kind === "level"
+                      ? vm.deleteLevel(deleting.id)
+                      : vm.deleteSpace(deleting.id));
+                    if (ok) setDeleting(null);
+                  }}
+                >
+                  Delete {deleting.kind}
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </AdaptiveDialog>
+      )}
     </Paper>
   );
 }
