@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { LeasesPanel } from "./LeasesPanel";
@@ -110,6 +110,90 @@ it("shows lifecycle controls for a manager and activates a draft lease", async (
     .setup()
     .click(screen.getByRole("button", { name: "Activate" }));
   expect(vm.activate).toHaveBeenCalledWith("lease-1");
+});
+
+it("asks for confirmation before cancelling a draft lease", async () => {
+  const vm = baseVm();
+  vi.mocked(useLeases).mockReturnValue(vm);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={false}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText(/cannot be reactivated/)).toBeVisible();
+  await user.click(within(dialog).getByRole("button", { name: "Keep lease" }));
+  expect(vm.cancel).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Cancel lease",
+    }),
+  );
+  await waitFor(() => expect(vm.cancel).toHaveBeenCalledWith("lease-1"));
+});
+
+it("asks for confirmation before forfeiting a deposit", async () => {
+  const vm = baseVm();
+  vi.mocked(useLeases).mockReturnValue(vm);
+  vi.mocked(useLeaseDetail).mockReturnValue({
+    isLoading: false,
+    data: {
+      status: "ACTIVE",
+      balance: "0.00",
+      currency: "USD",
+      charges: [],
+      payments: [],
+      deposit: { status: "HELD", amount: "500.00" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  render(
+    <LeasesPanel
+      org="org"
+      building="building"
+      canManage={true}
+      canManageFinance={true}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "View" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Forfeit deposit",
+    }),
+  );
+  const confirm = await screen.findByRole("dialog");
+  expect(within(confirm).getByText(/will not be refunded/)).toBeVisible();
+  expect(vm.forfeitDeposit).not.toHaveBeenCalled();
+  await user.click(
+    within(confirm).getByRole("button", { name: "Keep deposit" }),
+  );
+  expect(vm.forfeitDeposit).not.toHaveBeenCalled();
+
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Forfeit deposit",
+    }),
+  );
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Forfeit deposit",
+    }),
+  );
+  await waitFor(() =>
+    expect(vm.forfeitDeposit).toHaveBeenCalledWith(
+      "lease-1",
+      "Forfeited by owner decision",
+    ),
+  );
 });
 
 it("blocks an empty new lease and shows every required error", async () => {

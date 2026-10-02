@@ -7,6 +7,8 @@ import {
   type AssetStatus,
   type NewAsset,
 } from "../model/assets";
+import { reportError } from "@/shared/feedback/reportError";
+import { withOptimisticList, withoutId } from "@/shared/api/optimistic";
 
 export function useAssets(org: string, building: string, status?: AssetStatus) {
   const cache = useQueryClient();
@@ -18,17 +20,22 @@ export function useAssets(org: string, building: string, status?: AssetStatus) {
     queryFn: () => assetsApi.list(org, building, status),
     enabled: !!building,
   });
-  const run = async (fn: () => Promise<unknown>) => {
+  type Row = NonNullable<typeof list.data>[number];
+  const run = async (
+    fn: () => Promise<unknown>,
+    patch?: (rows: Row[]) => Row[],
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      if (patch) await withOptimisticList<Row>(cache, key, patch, fn);
+      else await fn();
       await cache.invalidateQueries({
         queryKey: [org, "building", building, "assets"],
       });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -43,7 +50,8 @@ export function useAssets(org: string, building: string, status?: AssetStatus) {
     update: (id: string, body: NewAsset) =>
       run(() => assetsApi.update(org, building, id, assetSchema.parse(body))),
     loadDetail: (id: string) => assetsApi.detail(org, building, id),
-    remove: (id: string) => run(() => assetsApi.remove(org, building, id)),
+    remove: (id: string) =>
+      run(() => assetsApi.remove(org, building, id), withoutId(id)),
     setStatus: (id: string, status: AssetStatus) =>
       run(() => assetsApi.setStatus(org, building, id, status)),
   };
@@ -75,9 +83,7 @@ export function useAssetDetail(org: string, building: string, asset: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to record reading",
-      );
+      setError(reportError(cause, "Failed to record reading"));
       return false;
     } finally {
       setBusy(false);

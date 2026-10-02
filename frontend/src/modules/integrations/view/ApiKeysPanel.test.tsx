@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, it, expect, vi } from "vitest";
 import { ApiKeysPanel } from "./ApiKeysPanel";
@@ -64,8 +64,23 @@ it("requires a key name of at most 120 characters", async () => {
   expect(create).not.toHaveBeenCalled();
 });
 
-it("revokes a key", async () => {
+it("asks for confirmation before revoking a key", async () => {
   render(<ApiKeysPanel org="org" />);
-  await userEvent.setup().click(screen.getByRole("button", { name: "Revoke" }));
-  expect(revoke).toHaveBeenCalledWith("key-1");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Revoke" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    within(dialog).getByText(/Anything using this key will stop working/),
+  ).toBeVisible();
+  expect(revoke).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(revoke).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Revoke" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Revoke key",
+    }),
+  );
+  await waitFor(() => expect(revoke).toHaveBeenCalledWith("key-1"));
 });

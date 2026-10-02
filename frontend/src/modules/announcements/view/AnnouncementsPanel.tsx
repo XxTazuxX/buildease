@@ -17,6 +17,7 @@ import {
   type Audience,
 } from "../model/announcements";
 import { useAnnouncements } from "../viewmodel/useAnnouncements";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 const audienceLabels: Record<Audience, string> = {
   ALL_RESIDENTS: "All residents",
@@ -86,6 +87,9 @@ export function AnnouncementsPanel({
         </Stack>
       </Paper>
       <Stack spacing={1}>
+        {vm.history.isLoading && (
+          <ListSkeleton rows={2} label="Loading announcements" />
+        )}
         {vm.history.data?.map((item) => (
           <Paper key={item.id} variant="outlined" sx={{ p: 1.75 }}>
             <Stack

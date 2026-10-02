@@ -15,6 +15,7 @@ import { formatDate } from "@/shared/utils/dates";
 import { money, type InvoiceDetail } from "../model/billing";
 import { useInvoice } from "../viewmodel/useBilling";
 import { InvoiceStatusChip } from "./InvoiceStatusChip";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -145,9 +146,7 @@ export function InvoiceDialog({
         }}
       />
       <DialogContent>
-        {query.isLoading && (
-          <Typography color="text.secondary">Loading invoice…</Typography>
-        )}
+        {query.isLoading && <DetailSkeleton label="Loading invoice" />}
         {query.error && <Alert severity="error">{query.error.message}</Alert>}
         {query.data && <InvoiceDocument invoice={query.data} />}
       </DialogContent>

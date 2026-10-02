@@ -45,6 +45,7 @@ import {
 import { usePlatformBilling } from "../viewmodel/useBilling";
 import { InvoiceDialog } from "./InvoiceDocument";
 import { InvoiceStatusChip, SubscriptionStatusChip } from "./InvoiceStatusChip";
+import { TableSkeleton } from "@/shared/components/Skeletons";
 
 type Section = "subscriptions" | "invoices" | "plans";
 type PlatformVm = ReturnType<typeof usePlatformBilling>;
@@ -521,6 +522,9 @@ export function PlatformBillingPanel() {
                 label="Pending plan requests only"
               />
             </Stack>
+            {vm.subscriptions.isLoading && (
+              <TableSkeleton label="Loading subscriptions" />
+            )}
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -633,6 +637,9 @@ export function PlatformBillingPanel() {
                 New invoice
               </Button>
             </Stack>
+            {vm.invoices.isLoading && (
+              <TableSkeleton label="Loading invoices" />
+            )}
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -725,6 +732,7 @@ export function PlatformBillingPanel() {
                 New plan
               </Button>
             </Stack>
+            {vm.plans.isLoading && <TableSkeleton label="Loading plans" />}
             <Table size="small">
               <TableHead>
                 <TableRow>

@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Paper, Stack, Typography } from "@mui/material";
 import { StatusChip } from "@/shared/components/Surface";
 import { useAccountingSync } from "../viewmodel/useIntegrations";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 export function AccountingSyncPanel({
   org,
@@ -46,6 +47,9 @@ export function AccountingSyncPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.history.isLoading && (
+          <ListSkeleton rows={2} label="Loading sync history" />
+        )}
         {vm.history.data?.map((item) => (
           <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
             <Stack

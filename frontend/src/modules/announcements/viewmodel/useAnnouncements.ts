@@ -5,6 +5,7 @@ import {
   announcementSchema,
   type NewAnnouncement,
 } from "../model/announcements";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useAnnouncements(org: string, building: string, page: number) {
   const cache = useQueryClient();
@@ -26,9 +27,7 @@ export function useAnnouncements(org: string, building: string, page: number) {
       });
       return true;
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to send announcement",
-      );
+      setError(reportError(cause, "Failed to send announcement"));
       return false;
     } finally {
       setBusy(false);

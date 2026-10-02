@@ -38,6 +38,7 @@ import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { PageHeader, StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import { AuditLogPanel } from "@/modules/admin/view/AuditLogPanel";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 function MemberProfileDialog({
   member,
@@ -221,6 +222,9 @@ export function PeoplePage({
                 </Alert>
               )}
               <Stack spacing={1.25} sx={{ mb: 2 }}>
+                {vm.members.isLoading && (
+                  <ListSkeleton label="Loading members" />
+                )}
                 {vm.members.data?.map((member) => {
                   const self = member.account_id === auth.profile?.id;
                   return (

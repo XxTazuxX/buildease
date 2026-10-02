@@ -9,6 +9,7 @@ import {
   type NewLease,
   type PaymentMethod,
 } from "../model/leases";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useLeases(org: string, building: string) {
   const cache = useQueryClient();
@@ -38,7 +39,7 @@ export function useLeases(org: string, building: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);

@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { notificationRoute } from "../model/notifications";
 import { useNotifications } from "../viewmodel/useNotifications";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 function BellIcon() {
   return (
@@ -79,9 +80,9 @@ export function NotificationBell() {
         </Stack>
         <Divider />
         {vm.list.isLoading && (
-          <Typography color="text.secondary" sx={{ p: 2 }}>
-            Loading…
-          </Typography>
+          <div style={{ padding: 16 }}>
+            <ListSkeleton rows={3} label="Loading notifications" />
+          </div>
         )}
         {vm.list.isError && (
           <Typography color="error" sx={{ p: 2 }}>

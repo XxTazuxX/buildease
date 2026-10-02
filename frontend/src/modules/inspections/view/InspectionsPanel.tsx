@@ -31,6 +31,8 @@ import {
   useInspections,
 } from "../viewmodel/useInspections";
 import { todayIso } from "@/shared/utils/dates";
+import { ListSkeleton } from "@/shared/components/Skeletons";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 const emptyInspection = () => ({
   spaceId: "",
@@ -96,6 +98,7 @@ export function InspectionsPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.list.isLoading && <ListSkeleton label="Loading inspections" />}
         {vm.list.data?.map((item) => (
           <Paper variant="outlined" key={item.id} sx={{ p: 1.75 }}>
             <Stack
@@ -217,9 +220,7 @@ function InspectionDetailDialog({
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Inspection detail</DialogTitle>
       <DialogContent>
-        {detail.detail.isLoading && (
-          <Typography color="text.secondary">Loading…</Typography>
-        )}
+        {detail.detail.isLoading && <DetailSkeleton label="Loading details" />}
         {detail.error && <Alert severity="error">{detail.error}</Alert>}
         {detail.detail.data && (
           <Stack spacing={2} sx={{ pt: 1 }}>

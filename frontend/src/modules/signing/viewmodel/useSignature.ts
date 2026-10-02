@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { signaturesApi, type SignatureRole } from "../model/signatures";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useSignature(org: string, building: string, lease: string) {
   const cache = useQueryClient();
@@ -31,7 +32,7 @@ export function useSignature(org: string, building: string, lease: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to sign");
+      setError(reportError(cause, "Failed to sign"));
       return false;
     } finally {
       setBusy(false);

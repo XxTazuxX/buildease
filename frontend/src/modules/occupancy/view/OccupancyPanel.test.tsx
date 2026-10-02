@@ -78,6 +78,45 @@ function withHousehold(overrides: Record<string, unknown> = {}) {
   return vm;
 }
 
+it("asks for confirmation before ending a space assignment", async () => {
+  const end = vi.fn().mockResolvedValue(true);
+  const base = vi.mocked(useOccupancy)("o", "b");
+  vi.mocked(useOccupancy).mockReturnValue({
+    ...base,
+    end,
+    residents: {
+      data: [
+        {
+          ...resident,
+          assignments: [
+            { id: "as1", space_id: "sp1", starts_on: "2026-01-01" },
+          ],
+        },
+      ],
+      error: null,
+    },
+    spaces: { data: [{ id: "sp1", name: "Flat 1", code: "F1" }], error: null },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "End" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText(/Sam Tenant.*Flat 1/)).toBeVisible();
+  await user.click(
+    within(dialog).getByRole("button", { name: "Keep assignment" }),
+  );
+  expect(end).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "End" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "End assignment",
+    }),
+  );
+  await waitFor(() => expect(end).toHaveBeenCalledWith("as1"));
+});
+
 it("lists each household member with Edit and Remove actions", () => {
   withHousehold();
   setup();

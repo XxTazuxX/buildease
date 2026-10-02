@@ -10,6 +10,7 @@ import {
 import { Pager } from "@/shared/components/Pager";
 import { isUuid } from "@/shared/forms/rules";
 import { useOrgAudit, usePlatformAudit } from "../viewmodel/useAdmin";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 const idProblem = (value: string) =>
   value.trim() !== "" && !isUuid(value.trim()) ? "Enter a valid ID (UUID)" : "";
@@ -80,6 +81,7 @@ export function AuditLogPanel({ org }: { org?: string } = {}) {
         </Paper>
       )}
       <Stack spacing={1}>
+        {query.isLoading && <ListSkeleton label="Loading activity" />}
         {query.data?.map((e) => (
           <Paper
             key={`${e.actor_id}-${e.action}-${e.created_at}`}

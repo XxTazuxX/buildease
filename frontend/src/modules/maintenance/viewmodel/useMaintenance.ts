@@ -12,6 +12,8 @@ import {
   type NewRecurringPlan,
   type Priority,
 } from "../model/maintenance";
+import { reportError } from "@/shared/feedback/reportError";
+import { withOptimisticList, withoutId } from "@/shared/api/optimistic";
 
 export function useMaintenance(org: string, building: string) {
   const cache = useQueryClient();
@@ -49,15 +51,20 @@ export function useMaintenance(org: string, building: string) {
       fetchAllPages((page) => adminApi.members(org, building, page)),
     enabled: false,
   });
-  const run = async (operation: () => Promise<unknown>) => {
+  type Category = NonNullable<typeof categories.data>[number];
+  type Vendor = NonNullable<typeof vendors.data>[number];
+  const run = async (
+    operation: () => Promise<unknown>,
+    optimistic?: () => Promise<void>,
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await operation();
+      await (optimistic ? optimistic() : operation());
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -105,7 +112,7 @@ export function useMaintenance(org: string, building: string) {
         await cache.invalidateQueries({ queryKey: key });
         return true;
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Operation failed");
+        setError(reportError(cause, "Operation failed"));
         return false;
       } finally {
         setBusy(false);
@@ -177,10 +184,30 @@ export function useMaintenance(org: string, building: string) {
         accountId?: string;
       },
     ) => run(() => maintenanceApi.updateVendor(org, building, vendor, body)),
-    deleteVendor: (vendor: string) =>
-      run(() => maintenanceApi.deleteVendor(org, building, vendor)),
-    deleteCategory: (category: string) =>
-      run(() => maintenanceApi.deleteCategory(org, building, category)),
+    deleteVendor: (vendor: string) => {
+      const operation = () =>
+        maintenanceApi.deleteVendor(org, building, vendor);
+      return run(operation, () =>
+        withOptimisticList<Vendor>(
+          cache,
+          [...key, "vendors"],
+          withoutId(vendor),
+          operation,
+        ),
+      );
+    },
+    deleteCategory: (category: string) => {
+      const operation = () =>
+        maintenanceApi.deleteCategory(org, building, category);
+      return run(operation, () =>
+        withOptimisticList<Category>(
+          cache,
+          [...key, "categories"],
+          withoutId(category),
+          operation,
+        ),
+      );
+    },
   };
 }
 
@@ -206,7 +233,7 @@ export function useRequestDetail(
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -237,7 +264,7 @@ export function useRequestDetail(
       window.open(url, "_blank", "noopener");
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Photo unavailable");
+      setError(reportError(cause, "Photo unavailable"));
       return false;
     }
   };
@@ -261,9 +288,7 @@ export function useRequestDetail(
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to upload photo",
-      );
+      setError(reportError(cause, "Failed to upload photo"));
       return false;
     } finally {
       setBusy(false);
@@ -292,15 +317,20 @@ export function useRecurringPlans(org: string, building: string) {
     queryFn: () => maintenanceApi.recurringPlans(org, building),
     enabled: !!building,
   });
-  const run = async (fn: () => Promise<unknown>) => {
+  type Plan = NonNullable<typeof plans.data>[number];
+  const run = async (
+    fn: () => Promise<unknown>,
+    patch?: (rows: Plan[]) => Plan[],
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      if (patch) await withOptimisticList<Plan>(cache, key, patch, fn);
+      else await fn();
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save plan");
+      setError(reportError(cause, "Could not save plan"));
       return false;
     } finally {
       setBusy(false);
@@ -324,6 +354,9 @@ export function useRecurringPlans(org: string, building: string) {
       ),
     );
   const remove = (plan: string) =>
-    run(() => maintenanceApi.deleteRecurringPlan(org, building, plan));
+    run(
+      () => maintenanceApi.deleteRecurringPlan(org, building, plan),
+      withoutId(plan),
+    );
   return { plans, busy, error, create, update, remove };
 }

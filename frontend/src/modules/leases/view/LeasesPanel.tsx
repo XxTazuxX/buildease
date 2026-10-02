@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
@@ -30,6 +31,8 @@ import {
   type PaymentMethod,
 } from "../model/leases";
 import { useLeaseDetail, useLeases } from "../viewmodel/useLeases";
+import { ListSkeleton } from "@/shared/components/Skeletons";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 const emptyLease = {
   residentId: "",
@@ -104,6 +107,7 @@ export function LeasesPanel({
   const [newLeaseOpen, setNewLeaseOpen] = useState(false);
   const newLease = useZodForm(leaseFormSchema, emptyLease);
   const [endingLease, setEndingLease] = useState<Lease | null>(null);
+  const [cancellingLease, setCancellingLease] = useState<Lease | null>(null);
   const [detailLease, setDetailLease] = useState<string | null>(null);
   const error = vm.error || vm.leases.error?.message;
 
@@ -150,6 +154,7 @@ export function LeasesPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.leases.isLoading && <ListSkeleton label="Loading leases" />}
         {vm.leases.data?.map((lease) => (
           <Paper variant="outlined" key={lease.id} sx={{ p: 1.75 }}>
             <Stack
@@ -183,7 +188,7 @@ export function LeasesPanel({
                   <Button
                     color="error"
                     disabled={vm.busy}
-                    onClick={() => void vm.cancel(lease.id)}
+                    onClick={() => setCancellingLease(lease)}
                   >
                     Cancel
                   </Button>
@@ -291,6 +296,24 @@ export function LeasesPanel({
         />
       )}
 
+      {cancellingLease && (
+        <ConfirmDialog
+          title="Cancel draft lease"
+          confirmLabel="Cancel lease"
+          cancelLabel="Keep lease"
+          busy={vm.busy}
+          error={vm.error}
+          onClose={() => setCancellingLease(null)}
+          onConfirm={async () => {
+            if (await vm.cancel(cancellingLease.id)) setCancellingLease(null);
+          }}
+        >
+          Cancel the draft lease for {residentName(cancellingLease.resident_id)}{" "}
+          · {spaceName(cancellingLease.space_id)}? A cancelled lease cannot be
+          reactivated.
+        </ConfirmDialog>
+      )}
+
       {detailLease && (
         <LeaseDetailDialog
           org={org}
@@ -328,6 +351,7 @@ function LeaseDetailDialog({
     method: "CASH" as PaymentMethod,
     receivedOn: "",
   });
+  const [forfeiting, setForfeiting] = useState(false);
   const deposit = useZodForm(depositFormSchema, { amount: "", heldOn: "" });
   const refund = useZodForm(
     refundFormSchema(Number(detail.data?.deposit?.amount ?? 0)),
@@ -338,9 +362,7 @@ function LeaseDetailDialog({
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Lease detail</DialogTitle>
       <DialogContent>
-        {detail.isLoading && (
-          <Typography color="text.secondary">Loading…</Typography>
-        )}
+        {detail.isLoading && <DetailSkeleton label="Loading details" />}
         {detail.data && (
           <Stack spacing={2} sx={{ pt: 1 }}>
             <StatusChip
@@ -484,12 +506,7 @@ function LeaseDetailDialog({
                       <Button
                         color="error"
                         disabled={vm.busy}
-                        onClick={() =>
-                          void vm.forfeitDeposit(
-                            lease,
-                            "Forfeited by owner decision",
-                          )
-                        }
+                        onClick={() => setForfeiting(true)}
                       >
                         Forfeit deposit
                       </Button>
@@ -510,6 +527,23 @@ function LeaseDetailDialog({
           </Stack>
         )}
       </DialogContent>
+      {forfeiting && (
+        <ConfirmDialog
+          title="Forfeit deposit"
+          confirmLabel="Forfeit deposit"
+          cancelLabel="Keep deposit"
+          busy={vm.busy}
+          error={vm.error}
+          onClose={() => setForfeiting(false)}
+          onConfirm={async () => {
+            if (await vm.forfeitDeposit(lease, "Forfeited by owner decision"))
+              setForfeiting(false);
+          }}
+        >
+          Forfeit this security deposit? The resident will not be refunded and
+          this cannot be undone.
+        </ConfirmDialog>
+      )}
     </AdaptiveDialog>
   );
 }

@@ -95,6 +95,29 @@ export const theme = createTheme({
         },
       },
     },
+    MuiSkeleton: {
+      defaultProps: { animation: "wave" },
+      styleOverrides: {
+        root: {
+          backgroundColor: alpha(ink, 0.07),
+          "@media (prefers-reduced-motion: reduce)": {
+            animation: "none",
+            "&::after": { animation: "none" },
+          },
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          alignItems: "center",
+          fontWeight: 500,
+        },
+        filled: { boxShadow: "0 10px 30px rgba(23, 43, 45, 0.18)" },
+        message: { overflowWrap: "anywhere" },
+      },
+    },
     MuiChip: { styleOverrides: { root: { fontWeight: 700, borderRadius: 8 } } },
     MuiTabs: { styleOverrides: { root: { minHeight: 48 } } },
     MuiTab: {

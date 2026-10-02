@@ -14,6 +14,7 @@ import {
   pushApi,
   pushSupported,
 } from "../model/push";
+import { reportError } from "@/shared/feedback/reportError";
 
 /** Opt-in for browser push notifications; hidden when the server has web push disabled. */
 export function PushToggle() {
@@ -46,9 +47,7 @@ export function PushToggle() {
                 .then(() => setEnabled(checked))
                 .catch((cause: unknown) =>
                   setError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "Could not update notifications",
+                    reportError(cause, "Could not update notifications"),
                   ),
                 )
                 .finally(() => setBusy(false));

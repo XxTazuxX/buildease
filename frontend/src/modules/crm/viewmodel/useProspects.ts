@@ -10,6 +10,8 @@ import {
   type ProspectStatus,
   type UpdatedProspect,
 } from "../model/prospects";
+import { reportError } from "@/shared/feedback/reportError";
+import { withOptimisticList, withoutId } from "@/shared/api/optimistic";
 
 export function useProspects(
   org: string,
@@ -25,17 +27,22 @@ export function useProspects(
     queryFn: () => prospectsApi.list(org, building, status),
     enabled: !!building,
   });
-  const run = async (fn: () => Promise<unknown>) => {
+  type Row = NonNullable<typeof list.data>[number];
+  const run = async (
+    fn: () => Promise<unknown>,
+    patch?: (rows: Row[]) => Row[],
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      if (patch) await withOptimisticList<Row>(cache, key, patch, fn);
+      else await fn();
       await cache.invalidateQueries({
         queryKey: [org, "building", building, "prospects"],
       });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -59,7 +66,8 @@ export function useProspects(
           updateProspectSchema.parse(body),
         ),
       ),
-    remove: (id: string) => run(() => prospectsApi.remove(org, building, id)),
+    remove: (id: string) =>
+      run(() => prospectsApi.remove(org, building, id), withoutId(id)),
     updateStatus: (id: string, status: ProspectStatus, notes?: string) =>
       run(() => prospectsApi.updateStatus(org, building, id, status, notes)),
     linkLease: (id: string, leaseId: string) =>

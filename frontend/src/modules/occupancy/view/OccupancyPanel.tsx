@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { Member } from "@/modules/admin/model/admin";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { PromptDialog } from "@/shared/components/PromptDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useZodForm } from "@/shared/forms/useZodForm";
@@ -25,6 +26,7 @@ import {
   type Resident,
 } from "../model/occupancy";
 import { useOccupancy } from "../viewmodel/useOccupancy";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 const emptyResident = { accountId: "", displayName: "", phone: "" };
 const emptyAssignment = { residentId: "", spaceId: "" };
@@ -103,6 +105,11 @@ export function OccupancyPanel({
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [editing, setEditing] = useState<Resident | null>(null);
   const [householdFor, setHouseholdFor] = useState<Resident | null>(null);
+  const [endingAssignment, setEndingAssignment] = useState<{
+    id: string;
+    resident: string;
+    space: string;
+  } | null>(null);
   const [editingMember, setEditingMember] = useState<{
     resident: Resident;
     member: HouseholdMember;
@@ -161,6 +168,7 @@ export function OccupancyPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.residents.isLoading && <ListSkeleton label="Loading residents" />}
         {vm.residents.data?.map((item) => (
           <Paper variant="outlined" key={item.id} sx={{ p: 1.75 }}>
             <Stack
@@ -196,7 +204,16 @@ export function OccupancyPanel({
                         size="small"
                         color="warning"
                         disabled={vm.busy}
-                        onClick={() => void vm.end(current.id)}
+                        onClick={() =>
+                          setEndingAssignment({
+                            id: current.id,
+                            resident: item.display_name,
+                            space:
+                              vm.spaces.data?.find(
+                                (space) => space.id === current.space_id,
+                              )?.name ?? "this space",
+                          })
+                        }
                       >
                         End
                       </Button>
@@ -374,48 +391,43 @@ export function OccupancyPanel({
           }}
         />
       )}
-      {removingMember && (
-        <AdaptiveDialog
-          open
-          onClose={() => setRemovingMember(null)}
-          fullWidth
-          maxWidth="xs"
+      {endingAssignment && (
+        <ConfirmDialog
+          title="End space assignment"
+          confirmLabel="End assignment"
+          cancelLabel="Keep assignment"
+          busy={vm.busy}
+          error={vm.error}
+          onClose={() => setEndingAssignment(null)}
+          onConfirm={async () => {
+            if (await vm.end(endingAssignment.id)) setEndingAssignment(null);
+          }}
         >
-          <DialogTitle>Remove household member</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Remove &ldquo;{removingMember.member.name}&rdquo; from{" "}
-                {removingMember.resident.display_name}&apos;s household? This
-                cannot be undone.
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setRemovingMember(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    if (
-                      await vm.removeHouseholdMember(
-                        removingMember.resident.id,
-                        removingMember.member.id,
-                      )
-                    )
-                      setRemovingMember(null);
-                  }}
-                >
-                  Remove member
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          End {endingAssignment.resident}&apos;s assignment of{" "}
+          {endingAssignment.space} as of today? The space will be released.
+        </ConfirmDialog>
+      )}
+      {removingMember && (
+        <ConfirmDialog
+          title="Remove household member"
+          confirmLabel="Remove member"
+          busy={vm.busy}
+          error={vm.error}
+          onClose={() => setRemovingMember(null)}
+          onConfirm={async () => {
+            if (
+              await vm.removeHouseholdMember(
+                removingMember.resident.id,
+                removingMember.member.id,
+              )
+            )
+              setRemovingMember(null);
+          }}
+        >
+          Remove &ldquo;{removingMember.member.name}&rdquo; from{" "}
+          {removingMember.resident.display_name}&apos;s household? This cannot
+          be undone.
+        </ConfirmDialog>
       )}
       <AdaptiveDialog
         open={assignmentOpen}

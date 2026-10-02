@@ -9,6 +9,7 @@ import {
   passwordRule,
   requiredEmail,
 } from "@/shared/forms/rules";
+import { reportError } from "@/shared/feedback/reportError";
 export interface Field {
   name: string;
   label: string;
@@ -68,7 +69,7 @@ export function FieldsForm({
           await onSubmit(v);
           form.reset();
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Request failed");
+          setError(reportError(e, "Request failed"));
         }
       })}
     >

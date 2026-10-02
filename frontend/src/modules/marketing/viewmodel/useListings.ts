@@ -9,6 +9,8 @@ import {
   type NewListing,
   type UpdatedListing,
 } from "../model/listings";
+import { reportError } from "@/shared/feedback/reportError";
+import { withOptimisticList, withoutId } from "@/shared/api/optimistic";
 
 export function useListings(org: string, building: string) {
   const cache = useQueryClient();
@@ -20,15 +22,20 @@ export function useListings(org: string, building: string) {
     queryFn: () => listingsApi.list(org, building),
     enabled: !!building,
   });
-  const run = async (fn: () => Promise<unknown>) => {
+  type Row = NonNullable<typeof list.data>[number];
+  const run = async (
+    fn: () => Promise<unknown>,
+    patch?: (rows: Row[]) => Row[],
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      if (patch) await withOptimisticList<Row>(cache, key, patch, fn);
+      else await fn();
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -47,7 +54,8 @@ export function useListings(org: string, building: string) {
       run(() =>
         listingsApi.update(org, building, id, updateListingSchema.parse(body)),
       ),
-    remove: (id: string) => run(() => listingsApi.remove(org, building, id)),
+    remove: (id: string) =>
+      run(() => listingsApi.remove(org, building, id), withoutId(id)),
     publish: (id: string, channels: ListingChannel[]) =>
       run(() => listingsApi.publish(org, building, id, channels)),
     unpublish: (id: string) =>

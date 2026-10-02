@@ -1,9 +1,10 @@
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { beforeEach, it, expect, vi } from "vitest";
 import { useListings } from "./useListings";
 import { listingsApi } from "../model/listings";
+import { notify } from "@/shared/feedback/notify";
 
 vi.mock("../model/listings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../model/listings")>();
@@ -147,5 +148,61 @@ it("publishes and unpublishes through the right endpoints", async () => {
     "org",
     "building",
     "listing-1",
+  );
+});
+
+it("removes a listing from the cached list before the server answers", async () => {
+  const rows = [
+    { id: "a", headline: "Corner unit" },
+    { id: "b", headline: "Penthouse" },
+  ];
+  vi.mocked(listingsApi.list).mockResolvedValue(rows as never);
+  let finish: () => void = () => {};
+  vi.mocked(listingsApi.remove).mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const { result } = renderHook(() => useListings("org", "building"), {
+    wrapper,
+  });
+  await waitFor(() => expect(result.current.list.data).toHaveLength(2));
+
+  let done: Promise<boolean> = Promise.resolve(false);
+  act(() => {
+    done = result.current.remove("a");
+  });
+  await waitFor(() =>
+    expect(result.current.list.data?.map((row) => row.id)).toEqual(["b"]),
+  );
+  await act(async () => {
+    finish();
+    await done;
+  });
+  expect(await done).toBe(true);
+});
+
+it("restores the row and raises an error toast when a delete is refused", async () => {
+  notify.clear();
+  const rows = [
+    { id: "a", headline: "Corner unit" },
+    { id: "b", headline: "Penthouse" },
+  ];
+  vi.mocked(listingsApi.list).mockResolvedValue(rows as never);
+  vi.mocked(listingsApi.remove).mockRejectedValueOnce(
+    new Error("Listing is published"),
+  );
+  const { result } = renderHook(() => useListings("org", "building"), {
+    wrapper,
+  });
+  await waitFor(() => expect(result.current.list.data).toHaveLength(2));
+
+  await act(async () => {
+    expect(await result.current.remove("a")).toBe(false);
+  });
+
+  expect(result.current.list.data?.map((row) => row.id)).toEqual(["a", "b"]);
+  expect(notify.snapshot().map((toast) => toast.message)).toContain(
+    "Listing is published",
   );
 });

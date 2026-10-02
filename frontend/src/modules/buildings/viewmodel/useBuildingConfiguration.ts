@@ -6,6 +6,8 @@ import {
   type BuildingConfiguration,
   type SpaceStatus,
 } from "../model/buildings";
+import { reportError } from "@/shared/feedback/reportError";
+import { withOptimisticList, withoutId } from "@/shared/api/optimistic";
 
 export function useBuildingConfiguration(org: string, building: string) {
   const cache = useQueryClient();
@@ -27,15 +29,22 @@ export function useBuildingConfiguration(org: string, building: string) {
     queryFn: () => buildingsApi.spaces(org, building),
     enabled,
   });
-  const run = async (operation: () => Promise<unknown>) => {
+  const levelsKey = [org, "building", building, "levels"];
+  const spacesKey = [org, "building", building, "spaces"];
+  type Level = NonNullable<typeof levels.data>[number];
+  type Space = NonNullable<typeof spaces.data>[number];
+  const run = async (
+    operation: () => Promise<unknown>,
+    optimistic?: () => Promise<void>,
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await operation();
+      await (optimistic ? optimistic() : operation());
       await cache.invalidateQueries({ queryKey: [org, "building", building] });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -57,12 +66,30 @@ export function useBuildingConfiguration(org: string, building: string) {
       level: string,
       body: { name: string; code: string; sortOrder: number },
     ) => run(() => buildingsApi.updateLevel(org, building, level, body)),
-    deleteLevel: (level: string) =>
-      run(() => buildingsApi.deleteLevel(org, building, level)),
+    deleteLevel: (level: string) => {
+      const operation = () => buildingsApi.deleteLevel(org, building, level);
+      return run(operation, () =>
+        withOptimisticList<Level>(
+          cache,
+          levelsKey,
+          withoutId(level),
+          operation,
+        ),
+      );
+    },
     updateSpace: (space: string, body: unknown) =>
       run(() => buildingsApi.updateSpace(org, building, space, body)),
-    deleteSpace: (space: string) =>
-      run(() => buildingsApi.deleteSpace(org, building, space)),
+    deleteSpace: (space: string) => {
+      const operation = () => buildingsApi.deleteSpace(org, building, space);
+      return run(operation, () =>
+        withOptimisticList<Space>(
+          cache,
+          spacesKey,
+          withoutId(space),
+          operation,
+        ),
+      );
+    },
     createSpace: (body: unknown) =>
       run(() => buildingsApi.createSpace(org, building, body)),
     setStatus: (space: string, status: Exclude<SpaceStatus, "OCCUPIED">) =>

@@ -3,6 +3,7 @@ import { StatusChip } from "@/shared/components/Surface";
 import { useOccupancy } from "@/modules/occupancy/viewmodel/useOccupancy";
 import { QueryError } from "@/shared/components/QueryError";
 import { formatDate } from "@/shared/utils/dates";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 export function MyUnitPanel({
   org,
@@ -22,7 +23,9 @@ export function MyUnitPanel({
       </Typography>
       <Typography variant="h5">Your home</Typography>
       <QueryError queries={failed} what="your unit" />
-      {residents.isError ? null : !resident?.space_id ? (
+      {residents.isLoading ? (
+        <DetailSkeleton label="Loading your unit" />
+      ) : residents.isError ? null : !resident?.space_id ? (
         <Typography color="text.secondary" sx={{ mt: 1 }}>
           You don&apos;t have an active unit assignment yet.
         </Typography>

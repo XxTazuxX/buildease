@@ -15,6 +15,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
@@ -28,6 +29,9 @@ import {
   useListingSpaces,
   useListings,
 } from "../viewmodel/useListings";
+import { reportError } from "@/shared/feedback/reportError";
+import { ListSkeleton } from "@/shared/components/Skeletons";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 const emptyListing = {
   spaceId: "",
@@ -72,9 +76,7 @@ export function ListingsPanel({
       setEditing(id);
       setCreateOpen(true);
     } catch (cause) {
-      setLoadError(
-        cause instanceof Error ? cause.message : "Could not load listing",
-      );
+      setLoadError(reportError(cause, "Could not load listing"));
     }
   };
 
@@ -118,6 +120,7 @@ export function ListingsPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.list.isLoading && <ListSkeleton label="Loading listings" />}
         {vm.list.data?.map((item) => (
           <Paper variant="outlined" key={item.id} sx={{ p: 1.75 }}>
             <Stack
@@ -243,41 +246,19 @@ export function ListingsPanel({
       </AdaptiveDialog>
 
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title="Delete listing"
+          confirmLabel="Delete listing"
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            if (await vm.remove(deleting.id)) setDeleting(null);
+          }}
         >
-          <DialogTitle>Delete listing</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.headline}&rdquo; and its
-                publishing history? This cannot be undone.
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    if (await vm.remove(deleting.id)) setDeleting(null);
-                  }}
-                >
-                  Delete listing
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.headline}&rdquo; and its
+          publishing history? This cannot be undone.
+        </ConfirmDialog>
       )}
 
       {publishing && (
@@ -360,9 +341,7 @@ function ListingDetailDialog({
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{detail.data?.headline ?? "Listing detail"}</DialogTitle>
       <DialogContent>
-        {detail.isLoading && (
-          <Typography color="text.secondary">Loading…</Typography>
-        )}
+        {detail.isLoading && <DetailSkeleton label="Loading details" />}
         {detail.data && (
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography color="text.secondary">

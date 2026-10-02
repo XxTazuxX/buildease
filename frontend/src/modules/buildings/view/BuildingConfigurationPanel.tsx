@@ -15,6 +15,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import {
@@ -26,6 +27,7 @@ import {
   type SpaceType,
 } from "../model/buildings";
 import { useBuildingConfiguration } from "../viewmodel/useBuildingConfiguration";
+import { CardGridSkeleton, ListSkeleton } from "@/shared/components/Skeletons";
 
 const configurationFields = {
   name: "Building name",
@@ -183,6 +185,9 @@ export function BuildingConfigurationPanel({
               Levels and zones
             </Typography>
             <Stack spacing={1} sx={{ mt: 1 }}>
+              {vm.levels.isLoading && (
+                <ListSkeleton rows={2} label="Loading levels" />
+              )}
               {vm.levels.data?.map((item) => (
                 <Paper variant="outlined" key={item.id} sx={{ p: 1.5 }}>
                   <Typography sx={{ fontWeight: 750 }}>{item.name}</Typography>
@@ -249,6 +254,11 @@ export function BuildingConfigurationPanel({
                 mt: 1,
               }}
             >
+              {vm.spaces.isLoading && (
+                <Box sx={{ gridColumn: "1 / -1" }}>
+                  <CardGridSkeleton count={4} label="Loading spaces" />
+                </Box>
+              )}
               {vm.spaces.data?.map((item) => (
                 <Paper
                   variant="outlined"
@@ -539,47 +549,25 @@ export function BuildingConfigurationPanel({
       </AdaptiveDialog>
 
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title={`Delete ${deleting.kind}`}
+          confirmLabel={`Delete ${deleting.kind}`}
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            const ok = await (deleting.kind === "level"
+              ? vm.deleteLevel(deleting.id)
+              : vm.deleteSpace(deleting.id));
+            if (ok) setDeleting(null);
+          }}
         >
-          <DialogTitle>Delete {deleting.kind}</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
-                undone.{" "}
-                {deleting.kind === "level"
-                  ? "A level that still has spaces can't be deleted."
-                  : "A space that has leases, residents, listings, requests or assets can't be deleted; mark it Inactive instead."}
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    const ok = await (deleting.kind === "level"
-                      ? vm.deleteLevel(deleting.id)
-                      : vm.deleteSpace(deleting.id));
-                    if (ok) setDeleting(null);
-                  }}
-                >
-                  Delete {deleting.kind}
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+          undone.{" "}
+          {deleting.kind === "level"
+            ? "A level that still has spaces can't be deleted."
+            : "A space that has leases, residents, listings, requests or assets can't be deleted; mark it Inactive instead."}
+        </ConfirmDialog>
       )}
     </Paper>
   );

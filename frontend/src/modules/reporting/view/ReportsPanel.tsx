@@ -22,6 +22,7 @@ import {
 } from "../viewmodel/useReporting";
 import { todayIso } from "@/shared/utils/dates";
 import { dateRangeErrors } from "../model/reporting";
+import { TableSkeleton } from "@/shared/components/Skeletons";
 
 // Local calendar dates; toISOString() would shift them across the UTC boundary.
 function firstOfMonthIso() {
@@ -133,6 +134,7 @@ function RentRollTab({ org, building }: { org: string; building: string }) {
           No active leases in this building.
         </Typography>
       )}
+      {query.isLoading && <TableSkeleton label="Loading rent roll" />}
       {query.data?.map((row) => (
         <Paper key={row.lease_id} variant="outlined" sx={{ p: 1.75 }}>
           <Stack
@@ -208,6 +210,9 @@ function IncomeStatementTab({
       {(query.error || exports.error) && (
         <Alert severity="error">{query.error?.message || exports.error}</Alert>
       )}
+      {query.isLoading && (
+        <TableSkeleton rows={3} columns={2} label="Loading report" />
+      )}
       {query.data && (
         <Stack spacing={1}>
           <Typography variant="body1">
@@ -280,6 +285,9 @@ function LeaseStatementTab({
           Select a lease to view its statement.
         </Typography>
       )}
+      {query.isLoading && (
+        <TableSkeleton rows={3} columns={2} label="Loading report" />
+      )}
       {query.data && (
         <Stack spacing={1}>
           <Typography variant="body2" color="text.secondary">
@@ -317,6 +325,9 @@ function OccupancyTab({ org, building }: { org: string; building: string }) {
   return (
     <Stack spacing={1.5}>
       {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {query.isLoading && (
+        <TableSkeleton rows={3} columns={2} label="Loading report" />
+      )}
       {query.data && (
         <>
           <Typography variant="h6">
@@ -379,6 +390,9 @@ function MaintenanceReportTab({
         />
       </Stack>
       {query.error && <Alert severity="error">{query.error.message}</Alert>}
+      {query.isLoading && (
+        <TableSkeleton rows={3} columns={2} label="Loading report" />
+      )}
       {query.data && (
         <Stack spacing={1}>
           <Typography variant="body1">

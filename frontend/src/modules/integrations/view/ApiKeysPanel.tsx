@@ -8,15 +8,21 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import { apiKeySchema } from "../model/integrations";
 import { useApiKeys } from "../viewmodel/useIntegrations";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 export function ApiKeysPanel({ org }: { org: string }) {
   const vm = useApiKeys(org);
   const form = useZodForm(apiKeySchema, { name: "" });
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const error = vm.error || vm.list.error?.message;
 
   return (
@@ -72,6 +78,9 @@ export function ApiKeysPanel({ org }: { org: string }) {
         </Button>
       </Stack>
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.list.isLoading && (
+          <ListSkeleton rows={2} label="Loading API keys" />
+        )}
         {vm.list.data?.map((item) => (
           <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
             <Stack
@@ -101,7 +110,9 @@ export function ApiKeysPanel({ org }: { org: string }) {
                     color="error"
                     size="small"
                     disabled={vm.busy}
-                    onClick={() => void vm.revoke(item.id)}
+                    onClick={() =>
+                      setRevoking({ id: item.id, name: item.name })
+                    }
                   >
                     Revoke
                   </Button>
@@ -114,6 +125,21 @@ export function ApiKeysPanel({ org }: { org: string }) {
           <Typography color="text.secondary">No API keys yet.</Typography>
         )}
       </Stack>
+      {revoking && (
+        <ConfirmDialog
+          title="Revoke API key"
+          confirmLabel="Revoke key"
+          busy={vm.busy}
+          error={vm.error}
+          onClose={() => setRevoking(null)}
+          onConfirm={async () => {
+            if (await vm.revoke(revoking.id)) setRevoking(null);
+          }}
+        >
+          Revoke &ldquo;{revoking.name}&rdquo;? Anything using this key will
+          stop working immediately. This cannot be undone.
+        </ConfirmDialog>
+      )}
     </Paper>
   );
 }

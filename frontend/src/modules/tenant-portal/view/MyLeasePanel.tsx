@@ -18,6 +18,7 @@ import { SignaturePanel } from "@/modules/signing";
 import { QueryError } from "@/shared/components/QueryError";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate } from "@/shared/utils/dates";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -61,7 +62,9 @@ export function MyLeasePanel({
       </Typography>
       <Typography variant="h5">Lease &amp; balance</Typography>
       <QueryError queries={[vm.leases, detail]} what="your lease" />
-      {vm.leases.isError ? null : !lease ? (
+      {vm.leases.isLoading ? (
+        <DetailSkeleton label="Loading your lease" />
+      ) : vm.leases.isError ? null : !lease ? (
         <Typography color="text.secondary" sx={{ mt: 1 }}>
           No lease on file yet.
         </Typography>

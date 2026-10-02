@@ -22,6 +22,7 @@ import {
   type WorkOrder,
 } from "../model/maintenance";
 import { useRequestDetail } from "../viewmodel/useMaintenance";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 function WorkOrderSection({
   order,
@@ -132,9 +133,7 @@ export function RequestDetailDialog({
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{data?.title ?? "Request detail"}</DialogTitle>
       <DialogContent>
-        {detail.query.isLoading && (
-          <Typography color="text.secondary">Loading…</Typography>
-        )}
+        {detail.query.isLoading && <DetailSkeleton label="Loading details" />}
         {(detail.error || detail.query.error) && (
           <Alert severity="error">
             {detail.error || detail.query.error?.message}

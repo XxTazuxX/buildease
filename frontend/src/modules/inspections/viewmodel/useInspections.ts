@@ -10,6 +10,7 @@ import {
   type NewInspection,
   type NewItem,
 } from "../model/inspections";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useInspections(
   org: string,
@@ -35,7 +36,7 @@ export function useInspections(
       });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);
@@ -94,7 +95,7 @@ export function useInspectionDetail(org: string, building: string, id: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to add item");
+      setError(reportError(cause, "Failed to add item"));
       return false;
     } finally {
       setBusy(false);
@@ -120,9 +121,7 @@ export function useInspectionDetail(org: string, building: string, id: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to upload photo",
-      );
+      setError(reportError(cause, "Failed to upload photo"));
       return false;
     } finally {
       setBusy(false);
@@ -139,7 +138,7 @@ export function useInspectionDetail(org: string, building: string, id: string) {
       );
       window.open(url, "_blank", "noopener");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Photo unavailable");
+      setError(reportError(cause, "Photo unavailable"));
     }
   };
   return { detail, busy, error, addItem, uploadPhoto, openPhoto };

@@ -8,6 +8,7 @@ import {
   type Account,
   type EmailTemplateKey,
 } from "../model/admin";
+import { reportError } from "@/shared/feedback/reportError";
 export function useAction() {
   const cache = useQueryClient();
   const [error, setError] = useState("");
@@ -20,7 +21,7 @@ export function useAction() {
       await cache.invalidateQueries();
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed");
+      setError(reportError(e, "Operation failed"));
       return false;
     } finally {
       setBusy(false);

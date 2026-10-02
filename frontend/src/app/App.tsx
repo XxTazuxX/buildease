@@ -49,6 +49,7 @@ import {
 import { BillingPage, SubscriptionBanner } from "@/modules/billing";
 import { LandingPage, PricingPage } from "@/modules/marketing-site";
 import { NotificationBell, PushToggle } from "@/modules/notifications";
+import { PageSkeleton } from "@/shared/components/Skeletons";
 
 const drawerWidth = 272;
 const PlatformPage = lazy(() =>
@@ -759,13 +760,7 @@ export default function App() {
             overflowX: "hidden",
           }}
         >
-          <Suspense
-            fallback={
-              <Box sx={{ py: 10, textAlign: "center" }}>
-                <CircularProgress aria-label="Loading workspace" />
-              </Box>
-            }
-          >
+          <Suspense fallback={<PageSkeleton label="Loading workspace" />}>
             {activeOrg && !loadingWorkspace && !invalidOrganization && (
               <SubscriptionBanner org={activeOrg} owner={!!access?.owner} />
             )}
@@ -776,9 +771,7 @@ export default function App() {
               </Alert>
             )}
             {loadingWorkspace ? (
-              <Box sx={{ py: 10, textAlign: "center" }}>
-                <CircularProgress aria-label="Loading workspace" />
-              </Box>
+              <PageSkeleton label="Loading workspace" />
             ) : (
               <Routes>
                 <Route

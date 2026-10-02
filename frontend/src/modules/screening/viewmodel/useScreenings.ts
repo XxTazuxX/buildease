@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { screeningsApi } from "../model/screenings";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useScreenings(org: string, building: string, prospect: string) {
   const cache = useQueryClient();
@@ -23,9 +24,7 @@ export function useScreenings(org: string, building: string, prospect: string) {
       });
       return true;
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to request screening",
-      );
+      setError(reportError(cause, "Failed to request screening"));
       return false;
     } finally {
       setBusy(false);

@@ -20,6 +20,7 @@ import {
 } from "@/modules/maintenance/viewmodel/useMaintenance";
 import { ReportIssueDialog } from "@/modules/maintenance/view/ReportIssueDialog";
 import { useOccupancy } from "@/modules/occupancy/viewmodel/useOccupancy";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 export function MyMaintenancePanel({
   org,
@@ -83,6 +84,9 @@ export function MyMaintenancePanel({
         </Alert>
       )}
       <Stack spacing={1.25} sx={{ mt: 2 }}>
+        {vm.requests.isLoading && (
+          <ListSkeleton rows={2} label="Loading your requests" />
+        )}
         {vm.requests.data?.map((item) => {
           const priority = item.priority ?? item.suggested_priority;
           return (

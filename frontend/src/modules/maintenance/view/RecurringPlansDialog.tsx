@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { Space } from "@/modules/buildings/model/buildings";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import { formatDate, todayIso } from "@/shared/utils/dates";
@@ -201,47 +202,25 @@ export function RecurringPlansDialog({
         </Stack>
       </DialogContent>
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title="Delete plan"
+          confirmLabel="Delete plan"
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            if (await vm.remove(deleting.id)) {
+              if (editing === deleting.id) {
+                setEditing(null);
+                plan.reset(emptyPlan());
+              }
+              setDeleting(null);
+            }
+          }}
         >
-          <DialogTitle>Delete plan</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.title}&rdquo;? It will stop
-                opening requests. Requests it already created are kept.
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    if (await vm.remove(deleting.id)) {
-                      if (editing === deleting.id) {
-                        setEditing(null);
-                        plan.reset(emptyPlan());
-                      }
-                      setDeleting(null);
-                    }
-                  }}
-                >
-                  Delete plan
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.title}&rdquo;? It will stop
+          opening requests. Requests it already created are kept.
+        </ConfirmDialog>
       )}
     </AdaptiveDialog>
   );

@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
@@ -26,6 +27,9 @@ import {
   useAssets,
   useAssetSpaces,
 } from "../viewmodel/useAssets";
+import { reportError } from "@/shared/feedback/reportError";
+import { ListSkeleton } from "@/shared/components/Skeletons";
+import { DetailSkeleton } from "@/shared/components/Skeletons";
 
 const emptyAsset = {
   spaceId: "",
@@ -75,9 +79,7 @@ export function AssetsPanel({
       setEditing(id);
       setCreateOpen(true);
     } catch (cause) {
-      setLoadError(
-        cause instanceof Error ? cause.message : "Could not load asset",
-      );
+      setLoadError(reportError(cause, "Could not load asset"));
     }
   };
   const error = vm.error || loadError || vm.list.error?.message;
@@ -123,6 +125,7 @@ export function AssetsPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.list.isLoading && <ListSkeleton label="Loading assets" />}
         {vm.list.data?.map((item) => (
           <Paper variant="outlined" key={item.id} sx={{ p: 1.75 }}>
             <Stack
@@ -252,42 +255,20 @@ export function AssetsPanel({
       </AdaptiveDialog>
 
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title="Delete asset"
+          confirmLabel="Delete asset"
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            if (await vm.remove(deleting.id)) setDeleting(null);
+          }}
         >
-          <DialogTitle>Delete asset</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
-                undone. An asset with meter readings can&apos;t be deleted;
-                retire it instead.
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    if (await vm.remove(deleting.id)) setDeleting(null);
-                  }}
-                >
-                  Delete asset
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+          undone. An asset with meter readings can&apos;t be deleted; retire it
+          instead.
+        </ConfirmDialog>
       )}
 
       {viewing && (
@@ -320,9 +301,7 @@ function AssetDetailDialog({
     <AdaptiveDialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{vm.detail.data?.name ?? "Asset detail"}</DialogTitle>
       <DialogContent>
-        {vm.detail.isLoading && (
-          <Typography color="text.secondary">Loading…</Typography>
-        )}
+        {vm.detail.isLoading && <DetailSkeleton label="Loading details" />}
         {(vm.error || vm.detail.error) && (
           <Alert severity="error">{vm.error || vm.detail.error?.message}</Alert>
         )}

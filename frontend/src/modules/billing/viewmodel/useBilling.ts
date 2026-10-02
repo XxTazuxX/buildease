@@ -14,6 +14,7 @@ import {
   type PlanInput,
   type SubscriptionStatus,
 } from "../model/billing";
+import { reportError } from "@/shared/feedback/reportError";
 
 /** Runs a mutation with shared busy/error state, then invalidates the given query keys. */
 function useMutationRunner() {
@@ -33,7 +34,7 @@ function useMutationRunner() {
       );
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operation failed");
+      setError(reportError(cause, "Operation failed"));
       return false;
     } finally {
       setBusy(false);

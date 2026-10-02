@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { leasesApi, type Lease } from "@/modules/leases";
 import { reportingApi } from "../model/reporting";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useRentRoll(org: string, building: string) {
   return useQuery({
@@ -93,7 +94,7 @@ export function useReportExports(org: string, building: string) {
     try {
       await fn();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Export failed");
+      setError(reportError(cause, "Export failed"));
     } finally {
       setBusy(false);
     }

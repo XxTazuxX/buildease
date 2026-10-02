@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { Pager } from "@/shared/components/Pager";
 import { PromptDialog } from "@/shared/components/PromptDialog";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { useZodForm } from "@/shared/forms/useZodForm";
 import {
@@ -26,6 +27,7 @@ import { useMaintenance } from "../viewmodel/useMaintenance";
 import { RecurringPlansDialog } from "./RecurringPlansDialog";
 import { ReportIssueDialog } from "./ReportIssueDialog";
 import { RequestDetailDialog } from "./RequestDetailDialog";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 const emptyCategory = { name: "", responseHours: "4", resolutionHours: "48" };
 const emptyVendor = { name: "", email: "", phone: "", accountId: "" };
@@ -197,6 +199,7 @@ export function MaintenancePanel({
         </Alert>
       )}
       <Stack spacing={1.25} sx={{ mt: 2 }}>
+        {vm.requests.isLoading && <ListSkeleton label="Loading requests" />}
         {vm.requests.data?.map((item) => {
           const priority = item.priority ?? item.suggested_priority;
           const overdue =
@@ -655,47 +658,25 @@ export function MaintenancePanel({
       </AdaptiveDialog>
 
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title={`Delete ${deleting.kind}`}
+          confirmLabel={`Delete ${deleting.kind}`}
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            const ok = await (deleting.kind === "category"
+              ? vm.deleteCategory(deleting.id)
+              : vm.deleteVendor(deleting.id));
+            if (ok) setDeleting(null);
+          }}
         >
-          <DialogTitle>Delete {deleting.kind}</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
-                undone.{" "}
-                {deleting.kind === "category"
-                  ? "A category that has requests or recurring plans can't be deleted; rename it instead."
-                  : "A vendor that has been assigned work can't be deleted."}
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    const ok = await (deleting.kind === "category"
-                      ? vm.deleteCategory(deleting.id)
-                      : vm.deleteVendor(deleting.id));
-                    if (ok) setDeleting(null);
-                  }}
-                >
-                  Delete {deleting.kind}
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+          undone.{" "}
+          {deleting.kind === "category"
+            ? "A category that has requests or recurring plans can't be deleted; rename it instead."
+            : "A vendor that has been assigned work can't be deleted."}
+        </ConfirmDialog>
       )}
     </Paper>
   );

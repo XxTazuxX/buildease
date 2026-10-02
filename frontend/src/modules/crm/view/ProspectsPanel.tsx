@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { AdaptiveDialog } from "@/shared/components/Responsive";
 import { StatusChip } from "@/shared/components/Surface";
 import { useZodForm } from "@/shared/forms/useZodForm";
@@ -29,6 +30,8 @@ import {
   useProspects,
   useProspectSpaces,
 } from "../viewmodel/useProspects";
+import { reportError } from "@/shared/feedback/reportError";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 function LinkLeaseForm({
   leases,
@@ -129,9 +132,7 @@ export function ProspectsPanel({
       setEditing(id);
       setCreateOpen(true);
     } catch (cause) {
-      setLoadError(
-        cause instanceof Error ? cause.message : "Could not load prospect",
-      );
+      setLoadError(reportError(cause, "Could not load prospect"));
     }
   };
 
@@ -190,6 +191,7 @@ export function ProspectsPanel({
         </Alert>
       )}
       <Stack spacing={1} sx={{ mt: 2 }}>
+        {vm.list.isLoading && <ListSkeleton label="Loading prospects" />}
         {vm.list.data?.map((item) => {
           const terminal = terminalStatuses.includes(item.status);
           return (
@@ -335,42 +337,20 @@ export function ProspectsPanel({
       </AdaptiveDialog>
 
       {deleting && (
-        <AdaptiveDialog
-          open
+        <ConfirmDialog
+          title="Delete prospect"
+          confirmLabel="Delete prospect"
+          busy={vm.busy}
+          error={vm.error}
           onClose={() => setDeleting(null)}
-          fullWidth
-          maxWidth="xs"
+          onConfirm={async () => {
+            if (await vm.remove(deleting.id)) setDeleting(null);
+          }}
         >
-          <DialogTitle>Delete prospect</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {vm.error && <Alert severity="error">{vm.error}</Alert>}
-              <Typography>
-                Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
-                undone. A prospect that was screened can&apos;t be deleted;
-                withdraw it instead.
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ justifyContent: "flex-end" }}
-              >
-                <Button onClick={() => setDeleting(null)}>Cancel</Button>
-                <Button
-                  color="error"
-                  variant="contained"
-                  disabled={vm.busy}
-                  onClick={async () => {
-                    if (await vm.remove(deleting.id)) setDeleting(null);
-                  }}
-                >
-                  Delete prospect
-                </Button>
-              </Stack>
-            </Stack>
-          </DialogContent>
-        </AdaptiveDialog>
+          Permanently delete &ldquo;{deleting.name}&rdquo;? This cannot be
+          undone. A prospect that was screened can&apos;t be deleted; withdraw
+          it instead.
+        </ConfirmDialog>
       )}
 
       {screeningProspect && (

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildingsApi } from "@/modules/buildings/model/buildings";
 import { todayIso } from "@/shared/utils/dates";
 import { occupancyApi } from "../model/occupancy";
+import { reportError } from "@/shared/feedback/reportError";
 export function useOccupancy(org: string, building: string) {
   const cache = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -26,7 +27,7 @@ export function useOccupancy(org: string, building: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed");
+      setError(reportError(e, "Operation failed"));
       return false;
     } finally {
       setBusy(false);

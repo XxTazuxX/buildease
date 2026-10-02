@@ -34,6 +34,7 @@ import { ActionSheet, AdaptiveDialog } from "@/shared/components/Responsive";
 import { PlatformBillingPanel } from "@/modules/billing";
 import { SettingsPanel } from "./SettingsPanel";
 import { AuditLogPanel } from "./AuditLogPanel";
+import { ListSkeleton } from "@/shared/components/Skeletons";
 
 type MoreTarget =
   | { kind: "organization"; item: Organization }
@@ -128,7 +129,11 @@ export function PlatformPage() {
               {action.error || query.error?.message}
             </Alert>
           )}
-          {query.isLoading && <Typography sx={{ p: 3 }}>Loading…</Typography>}
+          {query.isLoading && (
+            <div style={{ padding: 24 }}>
+              <ListSkeleton label={`Loading ${tab}`} />
+            </div>
+          )}
           {query.data?.length === 0 && (
             <Paper sx={{ p: 5, my: 3 }}>
               <Typography>

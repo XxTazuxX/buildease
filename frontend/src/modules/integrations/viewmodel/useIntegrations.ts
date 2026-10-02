@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountingApi, apiKeySchema, apiKeysApi } from "../model/integrations";
+import { reportError } from "@/shared/feedback/reportError";
 
 export function useApiKeys(org: string) {
   const cache = useQueryClient();
@@ -21,7 +22,7 @@ export function useApiKeys(org: string) {
       await cache.invalidateQueries({ queryKey: key });
       return created;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to create key");
+      setError(reportError(cause, "Failed to create key"));
       return null;
     } finally {
       setBusy(false);
@@ -35,7 +36,7 @@ export function useApiKeys(org: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to revoke key");
+      setError(reportError(cause, "Failed to revoke key"));
       return false;
     } finally {
       setBusy(false);
@@ -62,7 +63,7 @@ export function useAccountingSync(org: string, building: string) {
       await cache.invalidateQueries({ queryKey: key });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sync failed");
+      setError(reportError(cause, "Sync failed"));
       return false;
     } finally {
       setBusy(false);

@@ -29,6 +29,7 @@ import { useBilling } from "../viewmodel/useBilling";
 import { InvoiceDialog } from "./InvoiceDocument";
 import { InvoiceStatusChip, SubscriptionStatusChip } from "./InvoiceStatusChip";
 import { CycleToggle, PlanCards } from "./PlanCards";
+import { PageSkeleton } from "@/shared/components/Skeletons";
 
 function UsageMeter({
   label,
@@ -151,6 +152,7 @@ export function BillingPage({ org }: { org: string }) {
           {vm.error}
         </Alert>
       )}
+      {vm.overview.isLoading && <PageSkeleton label="Loading billing" />}
       {overview && (
         <Stack spacing={3}>
           {message && (
